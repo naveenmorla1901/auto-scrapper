@@ -57,6 +57,12 @@ async def submit_form(
         # Call the API endpoint with max_attempts parameter
         result = await endpoints.scrape_website(scrape_request, max_attempts=max_attempts)
         
+        # Store validation information
+        validation_info = {
+            "code_success": result.code is not None,
+            "data_success": result.data is not None and result.success,
+        }
+        
         # Render the results page
         return templates.TemplateResponse(
             "results.html",
@@ -65,7 +71,8 @@ async def submit_form(
                 "result": result,
                 "url": url,
                 "expected_data": expected_data,
-                "attempts": max_attempts
+                "attempts": max_attempts,
+                "validation": validation_info
             }
         )
     except HTTPException as e:

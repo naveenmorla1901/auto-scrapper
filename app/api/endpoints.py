@@ -56,13 +56,15 @@ async def scrape_website(
     # Execute scraping with retry logic
     attempts = 0
     execution_results = []
-    success = False
+    code_success = False  # Code execution success
+    data_success = False  # Data validation success
     final_code = None
     scraped_data = None
+    validation_reason = ""
     
     app_logger.info(f"Beginning scraping attempts (max: {max_attempts})")
     
-    while attempts < max_attempts and not success:
+    while attempts < max_attempts and not data_success:  # Continue until data validation succeeds or max attempts
         attempts += 1
         app_logger.info(f"Attempt {attempts}/{max_attempts}")
         
@@ -105,41 +107,22 @@ async def scrape_website(
             
             execution_results.append(execution_result)
             
-            # Check if successful
+            # Check if code execution was successful
             app_logger.info("Step 5: Checking if code execution was successful")
+            code_success = execution_result.success and execution_result.stdout.strip()
             
-            # For more robust success determination, let's check both the execution success
-            # and validate that meaningful data was extracted
-            success = execution_result.success
-            
-            if success:
-                # Further verify with helper LLM if needed
-                if execution_result.stdout.strip():
-                    try:
-                        # You could uncomment this for a more strict check using the helper LLM
-                        # success = llm_service.check_success(execution_result)
-                        success = True  # If we have output and no errors, consider it successful
-                    except Exception as e:
-                        app_logger.warning(f"Error during success check: {str(e)}")
-                        # Default to success if we can't check
-                        success = execution_result.success
-                else:
-                    # No output despite "success" flag
-                    success = False
-            
-            if success:
-                app_logger.info("Success! Scraping completed successfully.")
+            if code_success:
+                app_logger.info("Code execution successful. Processing output...")
                 final_code = clean_code
                 
                 # Process the output
                 output_text = execution_result.stdout.strip()
                 app_logger.info(f"Raw output: {output_text[:200]}...")
                 
-                # Log the comparison for debugging
-                app_logger.info(f"Expected success: {success}, Got: {execution_result.success}")
+                # Log details for debugging
                 app_logger.info(f"Stdout:\n{'-'*40}\n{output_text}\n{'-'*40}")
                 
-                # Check if the output contains valid JSON
+                # Parse the data
                 try:
                     if output_text.startswith('{') or output_text.startswith('['):
                         scraped_data = json.loads(output_text)
@@ -165,18 +148,43 @@ async def scrape_website(
                     app_logger.info("JSON parsing failed, using raw text")
                     scraped_data = output_text
                 
-                break  # Exit the loop if successful
+                # Validate the extracted data against user requirements
+                app_logger.info("Step 6: Validating extracted data against requirements")
+                data_success, validation_reason = llm_service.validate_extracted_data(
+                    scraped_data,
+                    request.expected_data
+                )
+                
+                if data_success:
+                    app_logger.info("Data validation successful. Extracted data meets requirements.")
+                    # We're done - data is valid!
+                    break
+                else:
+                    app_logger.info(f"Data validation failed. Reason: {validation_reason}")
+                    # Code executed, but data doesn't meet requirements
+                    # Create a refined prompt specifically addressing the data extraction issue
+                    app_logger.info("Step 7: Creating data-specific refinement prompt")
+                    data_refinement_prompt = llm_service.create_data_refinement_prompt(
+                        code=clean_code,
+                        current_data=scraped_data,
+                        expected_data=request.expected_data,
+                        validation_reason=validation_reason
+                    )
+                    formatted_prompt = data_refinement_prompt
             else:
-                app_logger.info("Execution not successful, refining code...")
+                app_logger.info("Code execution failed. Refining code...")
                 
                 # Refine the code based on the error
-                app_logger.info("Step 6: Refining code with error feedback")
+                app_logger.info("Step 7: Refining code with error feedback")
                 refined_prompt = llm_service.refine_code_with_error(
                     code=clean_code,
                     execution_result=execution_result
                 )
                 formatted_prompt = refined_prompt
-                app_logger.info("Refinement complete, starting next attempt")
+            
+            # Important: Log that we're continuing to the next iteration with the refined prompt
+            app_logger.info("Proceeding to next attempt with refined prompt...")
+            
         except Exception as e:
             error_msg = f"Error during execution attempt {attempts}: {str(e)}"
             app_logger.error(error_msg)
@@ -188,12 +196,26 @@ async def scrape_website(
                 fix_methods=[],
                 scraping_issues=[]
             ))
+            
+            # If there's an exception, we should still continue to the next attempt
+            # unless we've reached the maximum number of attempts
+            if attempts >= max_attempts:
+                app_logger.warning("Maximum attempts reached with errors, stopping.")
+            else:
+                app_logger.info("Proceeding to next attempt despite error...")
     
-    app_logger.info(f"Scraping process completed after {attempts} attempts. Success: {success}")
+    # Determine final success state - success only if both code execution and data validation succeeded
+    final_success = code_success and data_success
+    
+    app_logger.info(f"Scraping process completed after {attempts} attempts.")
+    app_logger.info(f"Code execution success: {code_success}")
+    app_logger.info(f"Data validation success: {data_success}")
+    if not data_success and validation_reason:
+        app_logger.info(f"Data validation failed reason: {validation_reason}")
     
     # Return the results
     return ScrapeResponse(
-        success=success,
+        success=final_success,
         data=scraped_data,
         code=final_code,
         attempts=attempts,

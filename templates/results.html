@@ -53,6 +53,12 @@
                 <span class="badge bg-{{ 'success' if result.success else 'danger' }} p-2">
                     {{ "Success" if result.success else "Failed" }}
                 </span>
+                <span class="badge bg-{{ 'success' if result.code else 'warning' }} p-2">
+                    {{ "Code OK" if result.code else "No Code" }}
+                </span>
+                <span class="badge bg-{{ 'success' if result.data else 'warning' }} p-2">
+                    {{ "Data OK" if result.data else "No Data" }}
+                </span>
                 <span class="badge bg-secondary p-2 attempts-badge">
                     {{ result.attempts }} of {{ attempts }} attempt{{ "s" if attempts != 1 else "" }}
                 </span>

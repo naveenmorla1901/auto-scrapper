@@ -20,7 +20,8 @@ ALLOWED_PACKAGES = [
     "numpy", "pandas", "requests", 
     "beautifulsoup4", "selenium", "scrapy", 
     "lxml", "html5lib", "httpx", "parsel", 
-    "fake-useragent", "playwright", "webdriver-manager"
+    "fake-useragent", "playwright", "webdriver-manager",
+    "selenium", "bs4", "urllib3"
 ]
 MAX_PACKAGE_SIZE = 10  # MB
 INSTALL_TIMEOUT = 15  # Seconds

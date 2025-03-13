@@ -1,4 +1,5 @@
-from typing import Dict, Any, Optional
+import json
+from typing import Dict, Any, Optional, Tuple
 import os
 import re
 from langchain_google_genai import ChatGoogleGenerativeAI
@@ -362,7 +363,128 @@ class LLMService:
         
         log_llm_interaction("OUTPUT", self.helper_model_name, response=response.content)
         return response.content
-    
+
+    def validate_extracted_data(self, data: Any, expected_data_description: str) -> Tuple[bool, str]:
+        """
+        Use helper LLM to validate if the extracted data matches user requirements
+        
+        Args:
+            data: The extracted data (can be any type)
+            expected_data_description: User's description of what they wanted
+            
+        Returns:
+            Tuple of (is_valid, reason_if_invalid)
+        """
+        if not self.helper_llm:
+            self.setup_helper_llm()
+        
+        # Convert data to a string representation
+        data_str = str(data)
+        if isinstance(data, (dict, list)):
+            try:
+                data_str = json.dumps(data, indent=2)
+            except:
+                data_str = str(data)
+        
+        prompt = f"""
+        I need to validate if the extracted data meets the user's requirements.
+        
+        USER REQUESTED DATA:
+        {expected_data_description}
+        
+        EXTRACTED DATA:
+        {data_str}
+        
+        Analyze if the extracted data satisfies what the user was looking for.
+        Consider:
+        1. Does it contain the specific information types requested?
+        2. Is it in a usable format?
+        3. Is it complete or at least contains meaningful information?
+        
+        Respond with ONLY "YES" if the data satisfies the requirements or "NO" if it doesn't.
+        If responding "NO", add a brief reason after, like "NO - Missing price information"
+        """
+        
+        app_logger.info("Validating extracted data against requirements")
+        log_llm_interaction("INPUT", self.helper_model_name, prompt)
+        
+        messages = [HumanMessage(content=prompt)]
+        response = self.helper_llm.invoke(messages)
+        
+        validation_result = response.content.strip().upper()
+        is_valid = validation_result.startswith("YES")
+        
+        app_logger.info(f"Data validation result: {'VALID' if is_valid else 'INVALID'}")
+        log_llm_interaction("OUTPUT", self.helper_model_name, response=response.content)
+        
+        # Extract reason if validation failed
+        reason = ""
+        if not is_valid and "-" in validation_result:
+            parts = validation_result.split("-", 1)
+            if len(parts) > 1:
+                reason = parts[1].strip()
+        
+        return is_valid, reason
+
+    def create_data_refinement_prompt(self, code: str, current_data: Any, expected_data: str, validation_reason: str) -> str:
+        """
+        Create a prompt to refine code when extracted data doesn't meet requirements
+        
+        Args:
+            code: The current code that executed successfully
+            current_data: The data that was extracted (but doesn't meet requirements)
+            expected_data: User's description of what they wanted
+            validation_reason: Reason why validation failed
+            
+        Returns:
+            Refined prompt for the coding LLM
+        """
+        if not self.helper_llm:
+            self.setup_helper_llm()
+        
+        # Convert data to a string representation
+        data_str = str(current_data)
+        if isinstance(current_data, (dict, list)):
+            try:
+                data_str = json.dumps(current_data, indent=2)
+            except:
+                data_str = str(current_data)
+        
+        prompt = f"""
+        The Python web scraping code executed successfully, but the extracted data doesn't meet the requirements.
+        
+        CODE:
+        ```python
+        {code}
+        ```
+        
+        EXTRACTED DATA:
+        {data_str}
+        
+        EXPECTED DATA DESCRIPTION:
+        {expected_data}
+        
+        VALIDATION ISSUE:
+        {validation_reason}
+        
+        Create a detailed prompt for an LLM to revise this code. The prompt should:
+        1. Explain that the code executes but doesn't extract the right data
+        2. Highlight specifically what data is missing or incorrect based on the validation issue
+        3. Suggest how to modify the code to correctly extract the required data
+        4. Request a complete, corrected version of the code that properly extracts and formats the data
+        
+        Focus on the data extraction logic, selectors, and output formatting.
+        """
+        
+        app_logger.info("Creating data-specific refinement prompt")
+        log_llm_interaction("INPUT", self.helper_model_name, prompt)
+        
+        messages = [HumanMessage(content=prompt)]
+        response = self.helper_llm.invoke(messages)
+        
+        log_llm_interaction("OUTPUT", self.helper_model_name, response=response.content)
+        return response.content
+        
     def check_success(self, execution_result: CodeExecutionResult) -> bool:
         """Use helper LLM to determine if the scraping was successful based on the output"""
         if not self.helper_llm:
