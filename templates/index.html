@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Auto Web Scraper</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="/static/css/style.css" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        <div class="app-header">
+            <h1>Auto Web Scraper</h1>
+            <p>Generate custom web scrapers with AI</p>
+        </div>
+        
+        <div class="card">
+            <div class="card-header">
+                Enter Scraping Details
+            </div>
+            <div class="card-body">
+                <form action="/submit" method="post">
+                    <div class="mb-3">
+                        <label for="url" class="form-label">Website URL</label>
+                        <input type="url" class="form-control" id="url" name="url" required
+                               placeholder="https://example.com">
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="expected_data" class="form-label">What data do you want to extract?</label>
+                        <textarea class="form-control" id="expected_data" name="expected_data" required
+                                 placeholder="Describe what data you need, e.g., 'Product prices and names from this e-commerce page'"></textarea>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="llm_model" class="form-label">LLM Model for Code Generation</label>
+                        <select class="form-select" id="llm_model" name="llm_model" required>
+                            <option value="" disabled selected>Select a model</option>
+                            
+                            <optgroup label="OpenAI Models">
+                                <option value="gpt-4o">GPT-4o</option>
+                                <option value="gpt-4o-mini">GPT-4o Mini</option>
+                                <option value="gpt-4-turbo">GPT-4 Turbo</option>
+                                <option value="gpt-4">GPT-4</option>
+                                <option value="gpt-3.5-turbo">GPT-3.5 Turbo</option>
+                            </optgroup>
+                            
+                            <optgroup label="Google Models">
+                                <option value="gemini-1.5-pro">Gemini 1.5 Pro</option>
+                                <option value="gemini-1.5-flash">Gemini 1.5 Flash</option>
+                                <option value="gemini-1.0-pro">Gemini 1.0 Pro</option>
+                                <option value="gemini-1.0-ultra">Gemini 1.0 Ultra</option>
+                            </optgroup>
+                            
+                            <optgroup label="Anthropic Models">
+                                <option value="claude-3-opus">Claude 3 Opus</option>
+                                <option value="claude-3-sonnet">Claude 3 Sonnet</option>
+                                <option value="claude-3-haiku">Claude 3 Haiku</option>
+                                <option value="claude-3.5-sonnet">Claude 3.5 Sonnet</option>
+                            </optgroup>
+                            
+                            <optgroup label="Mistral AI Models">
+                                <option value="mistral-large">Mistral Large</option>
+                                <option value="mistral-medium">Mistral Medium</option>
+                                <option value="mistral-small">Mistral Small</option>
+                            </optgroup>
+                            
+                            <optgroup label="Meta Models">
+                                <option value="llama-3-70b">Llama 3 70B</option>
+                                <option value="llama-3-8b">Llama 3 8B</option>
+                            </optgroup>
+                        </select>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="api_key" class="form-label">API Key</label>
+                        <input type="password" class="form-control" id="api_key" name="api_key" required
+                               placeholder="Enter your API key for the selected model">
+                        <div class="form-text">Your API key is only used for this request and not stored.</div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="max_attempts" class="form-label">Maximum Attempts</label>
+                        <input type="number" class="form-control" id="max_attempts" name="max_attempts" 
+                               value="3" min="1" max="10">
+                        <div class="form-text">Maximum number of code refinement attempts if initial code fails.</div>
+                    </div>
+                    
+                    <button type="submit" class="btn btn-primary">Generate & Run Scraper</button>
+                </form>
+            </div>
+        </div>
+        
+        <div class="card">
+            <div class="card-header">
+                How It Works
+            </div>
+            <div class="card-body">
+                <ol>
+                    <li><strong>Input</strong>: Enter the URL and describe the data you need</li>
+                    <li><strong>Prompt Formatting</strong>: Helper LLM formats your request</li>
+                    <li><strong>Code Generation</strong>: Your selected LLM generates scraping code</li>
+                    <li><strong>Code Execution</strong>: System tests and executes the code</li>
+                    <li><strong>Refinement</strong>: If needed, code is automatically refined based on error feedback</li>
+                    <li><strong>Results</strong>: View extracted data and usable Python code</li>
+                </ol>
+                
+                <div class="alert alert-info mt-3">
+                    <strong>Note:</strong> This tool uses Gemini 2.0 Flash-Lite as a helper LLM for prompt formatting and error analysis, 
+                    but your selected LLM and API key are used for the actual code generation.
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Show API key field conditionally based on model selection
+        document.getElementById('llm_model').addEventListener('change', function() {
+            const apiKeyField = document.getElementById('api_key');
+            apiKeyField.required = true;
+            document.querySelector('label[for="api_key"]').textContent = 'API Key for ' + this.options[this.selectedIndex].text;
+        });
+    </script>
+</body>
+</html>

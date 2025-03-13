@@ -1,0 +1,3 @@
+"""
+Auto Web Scraper Application
+"""

@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Scraping Results - Auto Web Scraper</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism.min.css" rel="stylesheet">
+    <style>
+        .container {
+            max-width: 1000px;
+        }
+        .card {
+            margin-top: 1.5rem;
+            margin-bottom: 1.5rem;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        .card-header {
+            background-color: #f8f9fa;
+            font-weight: bold;
+        }
+        pre {
+            margin: 0;
+            border-radius: 5px;
+            max-height: 500px;
+            overflow-y: auto;
+        }
+        .badge-success {
+            background-color: #28a745;
+        }
+        .badge-danger {
+            background-color: #dc3545;
+        }
+        .attempts-badge {
+            font-size: 1rem;
+        }
+        .tab-content {
+            padding: 1rem;
+            border: 1px solid #dee2e6;
+            border-top: none;
+            border-radius: 0 0 0.25rem 0.25rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1 class="text-center my-4">Web Scraping Results</h1>
+        
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <a href="/" class="btn btn-outline-primary">&laquo; New Scraping Task</a>
+            <div>
+                <span class="badge bg-{{ 'success' if result.success else 'danger' }} p-2">
+                    {{ "Success" if result.success else "Failed" }}
+                </span>
+                <span class="badge bg-secondary p-2 attempts-badge">
+                    {{ result.attempts }} of {{ attempts }} attempt{{ "s" if attempts != 1 else "" }}
+                </span>
+            </div>
+        </div>
+        
+        <div class="card">
+            <div class="card-header">
+                Scraping Request
+            </div>
+            <div class="card-body">
+                <dl class="row">
+                    <dt class="col-sm-3">URL</dt>
+                    <dd class="col-sm-9"><a href="{{ url }}" target="_blank">{{ url }}</a></dd>
+                    
+                    <dt class="col-sm-3">Requested Data</dt>
+                    <dd class="col-sm-9">{{ expected_data }}</dd>
+                </dl>
+            </div>
+        </div>
+        
+        {% if result.success %}
+        <div class="card">
+            <div class="card-header">
+                Extracted Data
+            </div>
+            <div class="card-body">
+                {% if result.data is mapping or result.data is sequence and result.data is not string %}
+                <pre><code class="language-json">{{ result.data | tojson(indent=2) }}</code></pre>
+                {% else %}
+                <pre>{{ result.data }}</pre>
+                {% endif %}
+            </div>
+        </div>
+        {% endif %}
+        
+        <div class="card">
+            <div class="card-header">
+                Scraping Code
+            </div>
+            <div class="card-body">
+                <ul class="nav nav-tabs" id="codeTabs" role="tablist">
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link active" id="final-code-tab" data-bs-toggle="tab" 
+                                data-bs-target="#final-code" type="button" role="tab" 
+                                aria-controls="final-code" aria-selected="true">
+                            Final Code
+                        </button>
+                    </li>
+                    {% for i in range(result.attempts) %}
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="attempt-{{ i+1 }}-tab" data-bs-toggle="tab" 
+                                data-bs-target="#attempt-{{ i+1 }}" type="button" role="tab" 
+                                aria-controls="attempt-{{ i+1 }}" aria-selected="false">
+                            Attempt {{ i+1 }}
+                        </button>
+                    </li>
+                    {% endfor %}
+                </ul>
+                <div class="tab-content" id="codeTabsContent">
+                    <div class="tab-pane fade show active" id="final-code" role="tabpanel" aria-labelledby="final-code-tab">
+                        {% if result.code %}
+                        <button class="btn btn-sm btn-outline-secondary float-end mb-2" 
+                                onclick="copyToClipboard('final-code-content')">
+                            Copy Code
+                        </button>
+                        <pre><code class="language-python" id="final-code-content">{{ result.code }}</code></pre>
+                        {% else %}
+                        <div class="alert alert-warning">No successful code was generated.</div>
+                        {% endif %}
+                    </div>
+                    
+                    {% for i in range(result.attempts) %}
+                    <div class="tab-pane fade" id="attempt-{{ i+1 }}" role="tabpanel" aria-labelledby="attempt-{{ i+1 }}-tab">
+                        {% set execution_result = result.execution_results[i] %}
+                        <div class="mb-3">
+                            <span class="badge bg-{{ 'success' if execution_result.success else 'danger' }} p-2">
+                                {{ "Success" if execution_result.success else "Failed" }}
+                            </span>
+                            <span class="badge bg-secondary p-2">
+                                Execution Time: {{ "%.2f"|format(execution_result.execution_time) }}s
+                            </span>
+                            {% if execution_result.scraper_type %}
+                            <span class="badge bg-info p-2">
+                                {{ execution_result.scraper_type }}
+                            </span>
+                            {% endif %}
+                        </div>
+                        
+                        <ul class="nav nav-pills mb-3" id="attempt-{{ i+1 }}-pills" role="tablist">
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link active" id="code-pill-{{ i+1 }}" data-bs-toggle="pill" 
+                                        data-bs-target="#code-content-{{ i+1 }}" type="button" role="tab" 
+                                        aria-controls="code-content-{{ i+1 }}" aria-selected="true">
+                                    Code
+                                </button>
+                            </li>
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link" id="output-pill-{{ i+1 }}" data-bs-toggle="pill" 
+                                        data-bs-target="#output-content-{{ i+1 }}" type="button" role="tab" 
+                                        aria-controls="output-content-{{ i+1 }}" aria-selected="false">
+                                    Output
+                                </button>
+                            </li>
+                            {% if execution_result.stderr %}
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link" id="error-pill-{{ i+1 }}" data-bs-toggle="pill" 
+                                        data-bs-target="#error-content-{{ i+1 }}" type="button" role="tab" 
+                                        aria-controls="error-content-{{ i+1 }}" aria-selected="false">
+                                    Errors
+                                </button>
+                            </li>
+                            {% endif %}
+                            {% if execution_result.scraping_issues %}
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link" id="issues-pill-{{ i+1 }}" data-bs-toggle="pill" 
+                                        data-bs-target="#issues-content-{{ i+1 }}" type="button" role="tab" 
+                                        aria-controls="issues-content-{{ i+1 }}" aria-selected="false">
+                                    Issues
+                                </button>
+                            </li>
+                            {% endif %}
+                        </ul>
+                        
+                        <div class="tab-content" id="attempt-{{ i+1 }}-pills-content">
+                            <div class="tab-pane fade show active" id="code-content-{{ i+1 }}" role="tabpanel" 
+                                 aria-labelledby="code-pill-{{ i+1 }}">
+                                <button class="btn btn-sm btn-outline-secondary float-end mb-2" 
+                                        onclick="copyToClipboard('attempt-{{ i+1 }}-code')">
+                                    Copy Code
+                                </button>
+                                <pre><code class="language-python" id="attempt-{{ i+1 }}-code">{{ execution_result.formatted_code }}</code></pre>
+                            </div>
+                            
+                            <div class="tab-pane fade" id="output-content-{{ i+1 }}" role="tabpanel" 
+                                 aria-labelledby="output-pill-{{ i+1 }}">
+                                <pre>{{ execution_result.stdout or "No output" }}</pre>
+                            </div>
+                            
+                            {% if execution_result.stderr %}
+                            <div class="tab-pane fade" id="error-content-{{ i+1 }}" role="tabpanel" 
+                                 aria-labelledby="error-pill-{{ i+1 }}">
+                                <pre class="text-danger">{{ execution_result.stderr }}</pre>
+                            </div>
+                            {% endif %}
+                            
+                            {% if execution_result.scraping_issues %}
+                            <div class="tab-pane fade" id="issues-content-{{ i+1 }}" role="tabpanel" 
+                                 aria-labelledby="issues-pill-{{ i+1 }}">
+                                <div class="list-group">
+                                    {% for issue in execution_result.scraping_issues %}
+                                    <div class="list-group-item">
+                                        <h5 class="mb-1">{{ issue.error_type|title }} Error</h5>
+                                        <p class="mb-1">{{ issue.explanation }}</p>
+                                        <small class="text-muted">Recommendation: {{ issue.recommendation }}</small>
+                                    </div>
+                                    {% endfor %}
+                                </div>
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/prism.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-python.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-json.min.js"></script>
+    <script>
+        function copyToClipboard(elementId) {
+            const element = document.getElementById(elementId);
+            const text = element.textContent;
+            
+            navigator.clipboard.writeText(text).then(() => {
+                const button = event.target;
+                const originalText = button.textContent;
+                button.textContent = "Copied!";
+                setTimeout(() => {
+                    button.textContent = originalText;
+                }, 2000);
+            })
+            .catch(err => {
+                console.error('Could not copy text: ', err);
+            });
+        }
+    </script>
+</body>
+</html>

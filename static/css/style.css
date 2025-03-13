@@ -1,0 +1,171 @@
+/* Custom styles for Auto Web Scraper */
+
+:root {
+    --primary-color: #3498db;
+    --secondary-color: #2c3e50;
+    --success-color: #2ecc71;
+    --danger-color: #e74c3c;
+    --warning-color: #f39c12;
+    --light-color: #f8f9fa;
+    --dark-color: #343a40;
+  }
+  
+  body {
+    background-color: #f5f8fa;
+    color: #333;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  }
+  
+  .container {
+    max-width: 1000px;
+  }
+  
+  .app-header {
+    margin: 2rem 0;
+    text-align: center;
+  }
+  
+  .app-header h1 {
+    color: var(--secondary-color);
+    font-weight: 600;
+  }
+  
+  .app-header p {
+    color: #666;
+    font-size: 1.1rem;
+  }
+  
+  .card {
+    border: none;
+    border-radius: 10px;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+    margin-bottom: 2rem;
+    overflow: hidden;
+  }
+  
+  .card-header {
+    background-color: var(--secondary-color);
+    color: white;
+    font-weight: 600;
+    padding: 1rem;
+  }
+  
+  .card-body {
+    padding: 1.5rem;
+  }
+  
+  .form-label {
+    font-weight: 500;
+    color: #555;
+  }
+  
+  .form-control {
+    border-radius: 5px;
+    border: 1px solid #ddd;
+    padding: 0.75rem;
+  }
+  
+  .form-control:focus {
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 0.2rem rgba(52, 152, 219, 0.25);
+  }
+  
+  textarea.form-control {
+    min-height: 120px;
+  }
+  
+  .btn-primary {
+    background-color: var(--primary-color);
+    border-color: var(--primary-color);
+    padding: 0.5rem 1.5rem;
+    font-weight: 500;
+    border-radius: 5px;
+  }
+  
+  .btn-primary:hover {
+    background-color: #2980b9;
+    border-color: #2980b9;
+  }
+  
+  .badge {
+    padding: 0.4rem 0.8rem;
+    font-size: 0.85rem;
+    font-weight: 500;
+    border-radius: 30px;
+  }
+  
+  .badge-success {
+    background-color: var(--success-color);
+  }
+  
+  .badge-danger {
+    background-color: var(--danger-color);
+  }
+  
+  .code-container {
+    position: relative;
+    margin-top: 1rem;
+  }
+  
+  .code-container pre {
+    background-color: #282c34;
+    color: #abb2bf;
+    border-radius: 5px;
+    padding: 1rem;
+    margin: 0;
+    overflow-x: auto;
+  }
+  
+  .copy-btn {
+    position: absolute;
+    top: 0.5rem;
+    right: 0.5rem;
+    background-color: rgba(255, 255, 255, 0.1);
+    color: #fff;
+    border: none;
+    border-radius: 3px;
+    padding: 0.3rem 0.6rem;
+    font-size: 0.8rem;
+    cursor: pointer;
+    transition: background-color 0.2s;
+  }
+  
+  .copy-btn:hover {
+    background-color: rgba(255, 255, 255, 0.2);
+  }
+  
+  .nav-tabs .nav-link {
+    color: var(--secondary-color);
+    font-weight: 500;
+  }
+  
+  .nav-tabs .nav-link.active {
+    color: var(--primary-color);
+    font-weight: 600;
+  }
+  
+  .error-container {
+    background-color: #fff3f3;
+    border-left: 4px solid var(--danger-color);
+    padding: 1rem;
+    margin-top: 1rem;
+    border-radius: 5px;
+  }
+  
+  .error-container pre {
+    color: var(--danger-color);
+    background-color: transparent;
+    padding: 0;
+    margin: 0.5rem 0 0;
+  }
+  
+  /* Responsive adjustments */
+  @media (max-width: 768px) {
+    .container {
+      padding: 0 15px;
+    }
+    
+    .card-body {
+      padding: 1rem;
+    }
+  }
