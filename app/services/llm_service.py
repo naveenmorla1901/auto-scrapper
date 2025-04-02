@@ -34,13 +34,18 @@ class LLMService:
         }
         
         # Map of user-friendly model names to actual API model names
-        # This is especially important for Claude models
+        # This is especially important for Claude models and Mistral models
         self.model_name_map = {
             # Claude models - their actual API names
             "claude-3-opus": "claude-3-opus-20240229",
             "claude-3-sonnet": "claude-3-sonnet-20240229",
             "claude-3-haiku": "claude-3-haiku-20240307",
-            "claude-3.5-sonnet": "claude-3-5-sonnet-20240620",  # Fictional future model, just a placeholder
+            "claude-3.5-sonnet": "claude-3-5-sonnet-20240620",
+            
+            # Mistral models - their actual API names
+            "mistral-large": "mistral-large-latest",
+            "mistral-medium": "mistral-medium-latest",
+            "mistral-small": "mistral-small-latest",
             
             # The rest use the same names
             "default": lambda x: x  # Default is to use the same name

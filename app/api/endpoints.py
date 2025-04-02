@@ -64,7 +64,7 @@ async def scrape_website(
     
     app_logger.info(f"Beginning scraping attempts (max: {max_attempts})")
     
-    while attempts < max_attempts and not data_success:  # Continue until data validation succeeds or max attempts
+    while attempts < max_attempts:  # Continue until max attempts
         attempts += 1
         app_logger.info(f"Attempt {attempts}/{max_attempts}")
         
@@ -171,6 +171,11 @@ async def scrape_website(
                         validation_reason=validation_reason
                     )
                     formatted_prompt = data_refinement_prompt
+                    app_logger.info("Data refinement prompt created, continuing to next attempt")
+                    
+                    # Only exit the loop if we're on the last attempt
+                    if attempts >= max_attempts:
+                        break
             else:
                 app_logger.info("Code execution failed. Refining code...")
                 
@@ -181,10 +186,12 @@ async def scrape_website(
                     execution_result=execution_result
                 )
                 formatted_prompt = refined_prompt
-            
-            # Important: Log that we're continuing to the next iteration with the refined prompt
-            app_logger.info("Proceeding to next attempt with refined prompt...")
-            
+                app_logger.info("Code refinement complete, continuing to next attempt")
+                
+                # Only exit the loop if we're on the last attempt
+                if attempts >= max_attempts:
+                    break
+                    
         except Exception as e:
             error_msg = f"Error during execution attempt {attempts}: {str(e)}"
             app_logger.error(error_msg)
@@ -201,8 +208,7 @@ async def scrape_website(
             # unless we've reached the maximum number of attempts
             if attempts >= max_attempts:
                 app_logger.warning("Maximum attempts reached with errors, stopping.")
-            else:
-                app_logger.info("Proceeding to next attempt despite error...")
+                break
     
     # Determine final success state - success only if both code execution and data validation succeeded
     final_success = code_success and data_success
