@@ -5,7 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Scraping Results - Auto Web Scraper</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism.min.css" rel="stylesheet">
+    <link href="/static/css/status.css" rel="stylesheet">
     <style>
         .container {
             max-width: 1000px;
@@ -46,7 +48,7 @@
 <body>
     <div class="container">
         <h1 class="text-center my-4">Web Scraping Results</h1>
-        
+
         <div class="d-flex justify-content-between align-items-center mb-3">
             <a href="/" class="btn btn-outline-primary">&laquo; New Scraping Task</a>
             <div>
@@ -64,7 +66,7 @@
                 </span>
             </div>
         </div>
-        
+
         <div class="card">
             <div class="card-header">
                 Scraping Request
@@ -73,13 +75,13 @@
                 <dl class="row">
                     <dt class="col-sm-3">URL</dt>
                     <dd class="col-sm-9"><a href="{{ url }}" target="_blank">{{ url }}</a></dd>
-                    
+
                     <dt class="col-sm-3">Requested Data</dt>
                     <dd class="col-sm-9">{{ expected_data }}</dd>
                 </dl>
             </div>
         </div>
-        
+
         {% if result.success %}
         <div class="card">
             <div class="card-header">
@@ -94,7 +96,7 @@
             </div>
         </div>
         {% endif %}
-        
+
         <div class="card">
             <div class="card-header">
                 Scraping Code
@@ -102,16 +104,16 @@
             <div class="card-body">
                 <ul class="nav nav-tabs" id="codeTabs" role="tablist">
                     <li class="nav-item" role="presentation">
-                        <button class="nav-link active" id="final-code-tab" data-bs-toggle="tab" 
-                                data-bs-target="#final-code" type="button" role="tab" 
+                        <button class="nav-link active" id="final-code-tab" data-bs-toggle="tab"
+                                data-bs-target="#final-code" type="button" role="tab"
                                 aria-controls="final-code" aria-selected="true">
                             Final Code
                         </button>
                     </li>
                     {% for i in range(result.attempts) %}
                     <li class="nav-item" role="presentation">
-                        <button class="nav-link" id="attempt-{{ i+1 }}-tab" data-bs-toggle="tab" 
-                                data-bs-target="#attempt-{{ i+1 }}" type="button" role="tab" 
+                        <button class="nav-link" id="attempt-{{ i+1 }}-tab" data-bs-toggle="tab"
+                                data-bs-target="#attempt-{{ i+1 }}" type="button" role="tab"
                                 aria-controls="attempt-{{ i+1 }}" aria-selected="false">
                             Attempt {{ i+1 }}
                         </button>
@@ -121,7 +123,7 @@
                 <div class="tab-content" id="codeTabsContent">
                     <div class="tab-pane fade show active" id="final-code" role="tabpanel" aria-labelledby="final-code-tab">
                         {% if result.code %}
-                        <button class="btn btn-sm btn-outline-secondary float-end mb-2" 
+                        <button class="btn btn-sm btn-outline-secondary float-end mb-2"
                                 onclick="copyToClipboard('final-code-content')">
                             Copy Code
                         </button>
@@ -130,7 +132,7 @@
                         <div class="alert alert-warning">No successful code was generated.</div>
                         {% endif %}
                     </div>
-                    
+
                     {% for i in range(result.attempts) %}
                     <div class="tab-pane fade" id="attempt-{{ i+1 }}" role="tabpanel" aria-labelledby="attempt-{{ i+1 }}-tab">
                         {% set execution_result = result.execution_results[i] %}
@@ -147,26 +149,26 @@
                             </span>
                             {% endif %}
                         </div>
-                        
+
                         <ul class="nav nav-pills mb-3" id="attempt-{{ i+1 }}-pills" role="tablist">
                             <li class="nav-item" role="presentation">
-                                <button class="nav-link active" id="code-pill-{{ i+1 }}" data-bs-toggle="pill" 
-                                        data-bs-target="#code-content-{{ i+1 }}" type="button" role="tab" 
+                                <button class="nav-link active" id="code-pill-{{ i+1 }}" data-bs-toggle="pill"
+                                        data-bs-target="#code-content-{{ i+1 }}" type="button" role="tab"
                                         aria-controls="code-content-{{ i+1 }}" aria-selected="true">
                                     Code
                                 </button>
                             </li>
                             <li class="nav-item" role="presentation">
-                                <button class="nav-link" id="output-pill-{{ i+1 }}" data-bs-toggle="pill" 
-                                        data-bs-target="#output-content-{{ i+1 }}" type="button" role="tab" 
+                                <button class="nav-link" id="output-pill-{{ i+1 }}" data-bs-toggle="pill"
+                                        data-bs-target="#output-content-{{ i+1 }}" type="button" role="tab"
                                         aria-controls="output-content-{{ i+1 }}" aria-selected="false">
                                     Output
                                 </button>
                             </li>
                             {% if execution_result.stderr %}
                             <li class="nav-item" role="presentation">
-                                <button class="nav-link" id="error-pill-{{ i+1 }}" data-bs-toggle="pill" 
-                                        data-bs-target="#error-content-{{ i+1 }}" type="button" role="tab" 
+                                <button class="nav-link" id="error-pill-{{ i+1 }}" data-bs-toggle="pill"
+                                        data-bs-target="#error-content-{{ i+1 }}" type="button" role="tab"
                                         aria-controls="error-content-{{ i+1 }}" aria-selected="false">
                                     Errors
                                 </button>
@@ -174,39 +176,39 @@
                             {% endif %}
                             {% if execution_result.scraping_issues %}
                             <li class="nav-item" role="presentation">
-                                <button class="nav-link" id="issues-pill-{{ i+1 }}" data-bs-toggle="pill" 
-                                        data-bs-target="#issues-content-{{ i+1 }}" type="button" role="tab" 
+                                <button class="nav-link" id="issues-pill-{{ i+1 }}" data-bs-toggle="pill"
+                                        data-bs-target="#issues-content-{{ i+1 }}" type="button" role="tab"
                                         aria-controls="issues-content-{{ i+1 }}" aria-selected="false">
                                     Issues
                                 </button>
                             </li>
                             {% endif %}
                         </ul>
-                        
+
                         <div class="tab-content" id="attempt-{{ i+1 }}-pills-content">
-                            <div class="tab-pane fade show active" id="code-content-{{ i+1 }}" role="tabpanel" 
+                            <div class="tab-pane fade show active" id="code-content-{{ i+1 }}" role="tabpanel"
                                  aria-labelledby="code-pill-{{ i+1 }}">
-                                <button class="btn btn-sm btn-outline-secondary float-end mb-2" 
+                                <button class="btn btn-sm btn-outline-secondary float-end mb-2"
                                         onclick="copyToClipboard('attempt-{{ i+1 }}-code')">
                                     Copy Code
                                 </button>
                                 <pre><code class="language-python" id="attempt-{{ i+1 }}-code">{{ execution_result.formatted_code }}</code></pre>
                             </div>
-                            
-                            <div class="tab-pane fade" id="output-content-{{ i+1 }}" role="tabpanel" 
+
+                            <div class="tab-pane fade" id="output-content-{{ i+1 }}" role="tabpanel"
                                  aria-labelledby="output-pill-{{ i+1 }}">
                                 <pre>{{ execution_result.stdout or "No output" }}</pre>
                             </div>
-                            
+
                             {% if execution_result.stderr %}
-                            <div class="tab-pane fade" id="error-content-{{ i+1 }}" role="tabpanel" 
+                            <div class="tab-pane fade" id="error-content-{{ i+1 }}" role="tabpanel"
                                  aria-labelledby="error-pill-{{ i+1 }}">
                                 <pre class="text-danger">{{ execution_result.stderr }}</pre>
                             </div>
                             {% endif %}
-                            
+
                             {% if execution_result.scraping_issues %}
-                            <div class="tab-pane fade" id="issues-content-{{ i+1 }}" role="tabpanel" 
+                            <div class="tab-pane fade" id="issues-content-{{ i+1 }}" role="tabpanel"
                                  aria-labelledby="issues-pill-{{ i+1 }}">
                                 <div class="list-group">
                                     {% for issue in execution_result.scraping_issues %}
@@ -226,16 +228,56 @@
             </div>
         </div>
     </div>
-    
+
+    <!-- Include token usage information -->
+    {% include "token_usage.html" %}
+
+    <!-- Status tracking container -->
+    <div id="status-container" class="mb-4" style="display: none;">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">Processing Status</h5>
+                <button type="button" class="btn-close" aria-label="Close" onclick="document.getElementById('status-container').style.display = 'none';"></button>
+            </div>
+            <div class="card-body">
+                <div class="progress mb-3">
+                    <div id="progress-bar" class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" style="width: 0%" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100"></div>
+                </div>
+                <p id="status-message" class="mb-3">Initializing...</p>
+
+                <div class="accordion" id="statusAccordion">
+                    <div class="accordion-item">
+                        <h2 class="accordion-header" id="headingStages">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseStages" aria-expanded="false" aria-controls="collapseStages">
+                                Processing Stages
+                            </button>
+                        </h2>
+                        <div id="collapseStages" class="accordion-collapse collapse" aria-labelledby="headingStages" data-bs-parent="#statusAccordion">
+                            <div class="accordion-body p-0">
+                                <ul id="stages-list" class="list-group list-group-flush">
+                                    <!-- Stages will be populated here -->
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast container for notifications -->
+    <div id="toast-container" class="toast-container position-fixed top-0 end-0 p-3"></div>
+
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/prism.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-python.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-json.min.js"></script>
+    <script src="/static/js/status.js"></script>
     <script>
         function copyToClipboard(elementId) {
             const element = document.getElementById(elementId);
             const text = element.textContent;
-            
+
             navigator.clipboard.writeText(text).then(() => {
                 const button = event.target;
                 const originalText = button.textContent;
@@ -248,6 +290,51 @@
                 console.error('Could not copy text: ', err);
             });
         }
+
+        // Initialize when document is loaded
+        document.addEventListener('DOMContentLoaded', function() {
+            // Display token usage if available
+            {% if result.helper_llm_usage and result.coding_llm_usage %}
+            displayTokenUsage(
+                {
+                    input_tokens: {{ result.helper_llm_usage.input_tokens }},
+                    output_tokens: {{ result.helper_llm_usage.output_tokens }},
+                    total_tokens: {{ result.helper_llm_usage.total_tokens }},
+                    cost: {{ result.helper_llm_usage.cost }}
+                },
+                {
+                    input_tokens: {{ result.coding_llm_usage.input_tokens }},
+                    output_tokens: {{ result.coding_llm_usage.output_tokens }},
+                    total_tokens: {{ result.coding_llm_usage.total_tokens }},
+                    cost: {{ result.coding_llm_usage.cost }}
+                },
+                {{ result.total_cost }}
+            );
+            {% endif %}
+
+            // Initialize status tracking if request_id is available
+            {% if request_id %}
+            // On results page, we only need to poll for a short time to get final status
+            initStatusTracking('{{ request_id }}');
+
+            // Force stop polling after 3 seconds on results page
+            setTimeout(() => {
+                console.log('Results page: Forcing stop of polling after 3 seconds');
+                if (typeof stopPolling === 'function') {
+                    stopPolling();
+                }
+                // Double-check by clearing any interval directly
+                if (typeof statusInterval !== 'undefined' && statusInterval) {
+                    clearInterval(statusInterval);
+                    statusInterval = null;
+                }
+                // Also remove the request ID to prevent further polling
+                if (typeof requestId !== 'undefined') {
+                    requestId = null;
+                }
+            }, 3000);
+            {% endif %}
+        });
     </script>
 </body>
 </html>

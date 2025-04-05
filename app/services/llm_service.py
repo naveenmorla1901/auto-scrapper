@@ -2,10 +2,11 @@ import json
 from typing import Dict, Any, Optional, Tuple
 import os
 import re
+import time
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_openai import ChatOpenAI
 from langchain.schema import HumanMessage, SystemMessage
-from ..models.schemas import CodeExecutionResult
+from ..models.schemas import CodeExecutionResult, TokenUsage
 from ..utils.logger import app_logger, log_llm_interaction
 
 class LLMService:
@@ -23,6 +24,41 @@ class LLMService:
         # Track current models
         self.helper_model_name = "gemini-2.0-flash-lite"
         self.coding_model_name = None
+
+        # Token usage tracking
+        self.helper_token_usage = TokenUsage()
+        self.coding_token_usage = TokenUsage()
+
+        # Model pricing (per 1000 tokens, in USD)
+        self.pricing = {
+            # OpenAI models
+            "gpt-4o": {"input": 0.005, "output": 0.015},
+            "gpt-4o-mini": {"input": 0.0015, "output": 0.006},
+            "gpt-4-turbo": {"input": 0.01, "output": 0.03},
+            "gpt-4": {"input": 0.03, "output": 0.06},
+            "gpt-3.5-turbo": {"input": 0.0005, "output": 0.0015},
+
+            # Google models
+            "gemini-1.5-pro": {"input": 0.0025, "output": 0.0075},
+            "gemini-1.5-flash": {"input": 0.0005, "output": 0.0015},
+            "gemini-2.0-flash-lite": {"input": 0.0001, "output": 0.0003},
+            "gemini-1.0-pro": {"input": 0.0025, "output": 0.0075},
+            "gemini-1.0-ultra": {"input": 0.0025, "output": 0.0075},
+
+            # Anthropic models
+            "claude-3-opus": {"input": 0.015, "output": 0.075},
+            "claude-3-sonnet": {"input": 0.003, "output": 0.015},
+            "claude-3-haiku": {"input": 0.00025, "output": 0.00125},
+            "claude-3.5-sonnet": {"input": 0.003, "output": 0.015},
+
+            # Mistral models
+            "mistral-large": {"input": 0.002, "output": 0.006},
+            "mistral-medium": {"input": 0.0008, "output": 0.0024},
+            "mistral-small": {"input": 0.0002, "output": 0.0006},
+
+            # Default fallback pricing
+            "default": {"input": 0.001, "output": 0.002}
+        }
 
         # Model provider mapping
         self.provider_patterns = {
@@ -232,6 +268,43 @@ class LLMService:
             app_logger.error(error_msg)
             raise ValueError(error_msg)
 
+    def estimate_tokens(self, text: str) -> int:
+        """Estimate the number of tokens in a text string"""
+        # Simple estimation: 1 token ≈ 4 characters for English text
+        return len(text) // 4
+
+    def calculate_cost(self, model: str, input_tokens: int, output_tokens: int) -> float:
+        """Calculate the cost of a model call based on token usage"""
+        # Get pricing for the model, or use default if not found
+        pricing = self.pricing.get(model, self.pricing["default"])
+
+        # Calculate cost (convert from per 1000 tokens to per token)
+        input_cost = (input_tokens / 1000) * pricing["input"]
+        output_cost = (output_tokens / 1000) * pricing["output"]
+
+        return input_cost + output_cost
+
+    def update_token_usage(self, is_helper: bool, input_text: str, output_text: str) -> TokenUsage:
+        """Update token usage for a model call"""
+        # Determine which usage to update
+        usage = self.helper_token_usage if is_helper else self.coding_token_usage
+        model = self.helper_model_name if is_helper else self.coding_model_name
+
+        # Estimate tokens
+        input_tokens = self.estimate_tokens(input_text)
+        output_tokens = self.estimate_tokens(output_text)
+
+        # Update usage
+        usage.input_tokens += input_tokens
+        usage.output_tokens += output_tokens
+        usage.total_tokens = usage.input_tokens + usage.output_tokens
+
+        # Calculate cost
+        cost = self.calculate_cost(model, input_tokens, output_tokens)
+        usage.cost += cost
+
+        return usage
+
     def format_scraping_prompt(self, url: str, expected_data: str) -> str:
         """Use helper LLM to format the scraping prompt"""
         if not self.helper_llm:
@@ -271,8 +344,18 @@ class LLMService:
         app_logger.info(f"Formatting scraping prompt for URL: {url}")
         log_llm_interaction("INPUT", self.helper_model_name, prompt)
 
+        # Track token usage
+        start_time = time.time()
+
         messages = [HumanMessage(content=prompt)]
         response = self.helper_llm.invoke(messages)
+
+        # Update token usage
+        self.update_token_usage(True, prompt, response.content)
+
+        # Log execution time
+        execution_time = time.time() - start_time
+        app_logger.info(f"Helper LLM response time: {execution_time:.2f} seconds")
 
         log_llm_interaction("OUTPUT", self.helper_model_name, response=response.content)
         return response.content
@@ -310,8 +393,18 @@ class LLMService:
         app_logger.info("Using helper LLM to extract code (regex methods failed)")
         log_llm_interaction("INPUT", self.helper_model_name, prompt)
 
+        # Track token usage
+        start_time = time.time()
+
         messages = [HumanMessage(content=prompt)]
         response = self.helper_llm.invoke(messages)
+
+        # Update token usage
+        self.update_token_usage(True, prompt, response.content)
+
+        # Log execution time
+        execution_time = time.time() - start_time
+        app_logger.info(f"Helper LLM code extraction time: {execution_time:.2f} seconds")
 
         extracted_code = response.content.strip()
 
@@ -382,7 +475,17 @@ class LLMService:
             HumanMessage(content=formatted_prompt)
         ]
 
+        # Track token usage
+        start_time = time.time()
+
         response = self.coding_llm.invoke(messages)
+
+        # Update token usage (include system message in input)
+        self.update_token_usage(False, system_message + formatted_prompt, response.content)
+
+        # Log execution time
+        execution_time = time.time() - start_time
+        app_logger.info(f"Coding LLM response time: {execution_time:.2f} seconds")
 
         log_llm_interaction("OUTPUT", self.coding_model_name, response=response.content)
         return response.content
@@ -442,8 +545,18 @@ class LLMService:
         app_logger.info("Refining code with error feedback")
         log_llm_interaction("INPUT", self.helper_model_name, prompt)
 
+        # Track token usage
+        start_time = time.time()
+
         messages = [HumanMessage(content=prompt)]
         response = self.helper_llm.invoke(messages)
+
+        # Update token usage
+        self.update_token_usage(True, prompt, response.content)
+
+        # Log execution time
+        execution_time = time.time() - start_time
+        app_logger.info(f"Helper LLM refinement time: {execution_time:.2f} seconds")
 
         log_llm_interaction("OUTPUT", self.helper_model_name, response=response.content)
         return response.content
@@ -492,8 +605,18 @@ class LLMService:
         app_logger.info("Validating extracted data against requirements")
         log_llm_interaction("INPUT", self.helper_model_name, prompt)
 
+        # Track token usage
+        start_time = time.time()
+
         messages = [HumanMessage(content=prompt)]
         response = self.helper_llm.invoke(messages)
+
+        # Update token usage
+        self.update_token_usage(True, prompt, response.content)
+
+        # Log execution time
+        execution_time = time.time() - start_time
+        app_logger.info(f"Helper LLM validation time: {execution_time:.2f} seconds")
 
         validation_result = response.content.strip().upper()
         is_valid = validation_result.startswith("YES")
@@ -563,8 +686,18 @@ class LLMService:
         app_logger.info("Creating data-specific refinement prompt")
         log_llm_interaction("INPUT", self.helper_model_name, prompt)
 
+        # Track token usage
+        start_time = time.time()
+
         messages = [HumanMessage(content=prompt)]
         response = self.helper_llm.invoke(messages)
+
+        # Update token usage
+        self.update_token_usage(True, prompt, response.content)
+
+        # Log execution time
+        execution_time = time.time() - start_time
+        app_logger.info(f"Helper LLM refinement prompt time: {execution_time:.2f} seconds")
 
         log_llm_interaction("OUTPUT", self.helper_model_name, response=response.content)
         return response.content

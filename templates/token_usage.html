@@ -1,0 +1,66 @@
+<!-- Token Usage Information -->
+{% if result.helper_llm_usage and result.coding_llm_usage %}
+<div class="card mb-4" id="token-usage">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h5 class="mb-0">Token Usage & Cost</h5>
+        <span class="badge bg-info">{{ result.helper_llm_usage.total_tokens + result.coding_llm_usage.total_tokens }} tokens</span>
+    </div>
+    <div class="card-body">
+        <!-- Token Distribution Chart -->
+        <div id="token-chart-container" class="mb-4"></div>
+
+        <div class="row">
+            <div class="col-md-6">
+                <h6>Helper LLM (Gemini 2.0 Flash-Lite)</h6>
+                <table class="table table-sm table-hover">
+                    <tr>
+                        <td>Input Tokens:</td>
+                        <td>{{ result.helper_llm_usage.input_tokens }}</td>
+                    </tr>
+                    <tr>
+                        <td>Output Tokens:</td>
+                        <td>{{ result.helper_llm_usage.output_tokens }}</td>
+                    </tr>
+                    <tr class="table-light">
+                        <td><strong>Total Tokens:</strong></td>
+                        <td id="helper-tokens"><strong>{{ result.helper_llm_usage.total_tokens }}</strong></td>
+                    </tr>
+                    <tr class="table-info">
+                        <td><strong>Cost:</strong></td>
+                        <td id="helper-cost"><strong>${{ '%.4f'|format(result.helper_llm_usage.cost) }}</strong></td>
+                    </tr>
+                </table>
+            </div>
+            <div class="col-md-6">
+                <h6>Coding LLM ({{ result.coding_model_name }})</h6>
+                <table class="table table-sm table-hover">
+                    <tr>
+                        <td>Input Tokens:</td>
+                        <td>{{ result.coding_llm_usage.input_tokens }}</td>
+                    </tr>
+                    <tr>
+                        <td>Output Tokens:</td>
+                        <td>{{ result.coding_llm_usage.output_tokens }}</td>
+                    </tr>
+                    <tr class="table-light">
+                        <td><strong>Total Tokens:</strong></td>
+                        <td id="coding-tokens"><strong>{{ result.coding_llm_usage.total_tokens }}</strong></td>
+                    </tr>
+                    <tr class="table-primary">
+                        <td><strong>Cost:</strong></td>
+                        <td id="coding-cost"><strong>${{ '%.4f'|format(result.coding_llm_usage.cost) }}</strong></td>
+                    </tr>
+                </table>
+            </div>
+        </div>
+        <div class="alert alert-info mt-3 d-flex justify-content-between align-items-center">
+            <div>
+                <strong>Total Cost:</strong> <span id="total-cost" class="fs-5">${{ '%.4f'|format(result.total_cost) }}</span>
+            </div>
+            <div>
+                <span class="badge bg-secondary">{{ result.attempts }} attempt{{ 's' if result.attempts != 1 else '' }}</span>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
