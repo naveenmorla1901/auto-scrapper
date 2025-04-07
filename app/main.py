@@ -9,6 +9,7 @@ import threading
 from dotenv import load_dotenv
 from app.services.status_service import create_request_id, create_status, cleanup_old_statuses
 from app.utils.logger import app_logger
+from app.utils.dependency_checker import check_website_analyzer_dependencies
 
 # Load environment variables from .env file
 load_dotenv()
@@ -22,6 +23,12 @@ from .api import endpoints
 from .models.schemas import ScrapeRequest
 
 app = FastAPI(title="Auto Web Scraper")
+
+@app.on_event("startup")
+async def startup_event():
+    """Check dependencies on startup"""
+    # Check if website analyzer dependencies are installed
+    check_website_analyzer_dependencies()
 
 # No middleware needed - we use a custom log filter instead
 

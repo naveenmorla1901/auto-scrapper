@@ -5,19 +5,22 @@ An intelligent web scraping tool that uses LLMs to generate and refine scraping 
 ## Features
 
 - Accepts URL and description of desired data
+- **Website Analyzer**: Automatically analyzes website structure and provides insights to improve scraping
 - Uses Gemini 2.0 Flash-Lite as a helper LLM to format requests
 - Uses user-provided LLM (GPT-4, Claude, etc.) to generate scraping code
 - Automatically executes and tests the scraping code
 - Refines the code if errors occur
 - Presents extracted data and working code to the user
+- Interactive UI with real-time status updates and token usage tracking
 - User-friendly web interface
 
 ## Tech Stack
 
 - **Backend**: FastAPI, Python 3.9+
-- **Frontend**: HTML, CSS, Bootstrap
+- **Frontend**: HTML, CSS, Bootstrap, JavaScript
 - **LLM Integration**: LangChain
 - **Web Scraping**: Playwright, BeautifulSoup, Requests
+- **Website Analysis**: Playwright, BeautifulSoup, LangDetect
 - **Containerization**: Docker
 
 ## Installation
@@ -47,16 +50,39 @@ An intelligent web scraping tool that uses LLMs to generate and refine scraping 
    pip install -r requirements.txt
    ```
 
-4. Install Playwright browsers:
+4. Website Analyzer Installation (Optional):
+
+   The website analyzer feature requires additional dependencies. You can install them using the provided script:
+
+   **Windows:**
+   ```bash
+   install_analyzer_windows.bat
+   ```
+   Note: On Windows, only static analysis is supported due to asyncio limitations with Playwright.
+
+   **Linux/Mac:**
+   ```bash
+   install_analyzer.bat
+   ```
+
+   **Manual Installation:**
+   ```bash
+   pip install langdetect==1.0.9 nest-asyncio==1.6.0
+   # For Linux/Mac only:
+   pip install playwright==1.42.0
+   python -m playwright install chromium
+   ```
+
+5. Install Playwright browsers:
    ```bash
    playwright install
    ```
 
-5. Set up environment variables:
+6. Set up environment variables:
    - Create a `.env` file based on the `.env.example` template
    - Add your API keys for different LLM providers
 
-6. Run the application:
+7. Run the application:
    ```bash
    uvicorn app.main:app --reload
    ```

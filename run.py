@@ -19,6 +19,12 @@ class StatusEndpointFilter(logging.Filter):
 
 # Configure logging
 def configure_logging():
+    # Configure the root logger to avoid duplicate logs
+    root_logger = logging.getLogger()
+    if root_logger.handlers:
+        for handler in root_logger.handlers:
+            root_logger.removeHandler(handler)
+
     # Get the uvicorn access logger
     access_logger = logging.getLogger("uvicorn.access")
 

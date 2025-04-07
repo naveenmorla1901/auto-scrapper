@@ -1,0 +1,163 @@
+<!-- Website Analysis Information -->
+{% if result.website_analysis is defined and result.website_analysis %}
+<div class="card mb-4" id="website-analysis">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h5 class="mb-0">Website Analysis</h5>
+        <span class="badge {% if result.website_analysis.is_dynamic %}bg-warning{% else %}bg-success{% endif %}">
+            {% if result.website_analysis.is_dynamic %}Dynamic Content{% else %}Static Content{% endif %}
+        </span>
+    </div>
+    <div class="card-body">
+        <div class="row mb-4">
+            <div class="col-md-6">
+                <h6>Structure Analysis</h6>
+                <table class="table table-sm table-hover">
+                    <tr>
+                        <td>Content Type:</td>
+                        <td>
+                            <span class="badge {% if result.website_analysis.is_dynamic %}bg-warning{% else %}bg-success{% endif %}">
+                                {% if result.website_analysis.is_dynamic %}Dynamic{% else %}Static{% endif %}
+                            </span>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>Text Ratio:</td>
+                        <td>{{ '%.2f'|format(result.website_analysis.text_ratio) }}</td>
+                    </tr>
+                    {% if result.website_analysis.language %}
+                    <tr>
+                        <td>Language:</td>
+                        <td>{{ result.website_analysis.language }}</td>
+                    </tr>
+                    {% endif %}
+                    <tr>
+                        <td>Components:</td>
+                        <td>
+                            {% for component, count in result.website_analysis.components.items() %}
+                                {% if count > 0 %}
+                                <span class="badge bg-secondary me-1">{{ component }}: {{ count }}</span>
+                                {% endif %}
+                            {% endfor %}
+                        </td>
+                    </tr>
+                </table>
+            </div>
+            <div class="col-md-6">
+                <h6>Technical Analysis</h6>
+                <table class="table table-sm table-hover">
+                    {% if result.website_analysis.frameworks %}
+                    <tr>
+                        <td>Frameworks:</td>
+                        <td>
+                            {% for framework, detected in result.website_analysis.frameworks.items() %}
+                                {% if detected %}
+                                <span class="badge bg-info me-1">{{ framework }}</span>
+                                {% endif %}
+                            {% endfor %}
+                            {% set framework_detected = false %}
+                            {% for framework, detected in result.website_analysis.frameworks.items() %}
+                                {% if detected %}
+                                    {% set framework_detected = true %}
+                                {% endif %}
+                            {% endfor %}
+
+                            {% if not framework_detected %}
+                            <span class="text-muted">None detected</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endif %}
+                    {% if result.website_analysis.pagination_patterns %}
+                    <tr>
+                        <td>Pagination:</td>
+                        <td>
+                            {% for pattern in result.website_analysis.pagination_patterns %}
+                            <span class="badge bg-warning me-1">{{ pattern }}</span>
+                            {% endfor %}
+                        </td>
+                    </tr>
+                    {% endif %}
+                    {% if result.website_analysis.performance_metrics %}
+                    <tr>
+                        <td>Load Time:</td>
+                        <td>
+                            {% if result.website_analysis.performance_metrics.loadTime %}
+                            {{ result.website_analysis.performance_metrics.loadTime|int }}ms
+                            {% else %}
+                            N/A
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endif %}
+                    {% if result.website_analysis.apis %}
+                    <tr>
+                        <td>APIs:</td>
+                        <td>{{ result.website_analysis.apis|length }} detected</td>
+                    </tr>
+                    {% endif %}
+                </table>
+            </div>
+        </div>
+
+        {% if result.website_analysis.recommendations %}
+        <div class="alert alert-info">
+            <h6>Recommendations</h6>
+            <ul class="mb-0">
+                {% for rec in result.website_analysis.recommendations %}
+                <li>{{ rec }}</li>
+                {% endfor %}
+            </ul>
+        </div>
+        {% endif %}
+
+        {% if result.website_analysis.selector_suggestions %}
+        <div class="alert alert-success">
+            <h6>Selector Suggestions</h6>
+            <ul class="mb-0">
+                {% for suggestion in result.website_analysis.selector_suggestions %}
+                <li>{{ suggestion }}</li>
+                {% endfor %}
+            </ul>
+        </div>
+        {% endif %}
+
+        {% if result.website_analysis.warnings %}
+        <div class="alert alert-warning">
+            <h6>Analysis Warnings</h6>
+            <ul class="mb-0">
+                {% for warning in result.website_analysis.warnings %}
+                <li>{{ warning }}</li>
+                {% endfor %}
+            </ul>
+        </div>
+        {% endif %}
+
+        <div class="text-end">
+            <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="collapse" data-bs-target="#rawAnalysisData" aria-expanded="false">
+                Show Raw Analysis Data
+            </button>
+        </div>
+
+        <div class="collapse mt-3" id="rawAnalysisData">
+            <div class="card card-body">
+                <pre class="mb-0"><code class="language-json">{
+    "url": "{{ result.website_analysis.url }}",
+    "is_dynamic": {{ result.website_analysis.is_dynamic|lower }},
+    "text_ratio": {{ result.website_analysis.text_ratio }},
+    "language": "{{ result.website_analysis.language }}",
+    "components": {
+        {% for component, count in result.website_analysis.components.items() %}
+        "{{ component }}": {{ count }}{% if not loop.last %},{% endif %}
+        {% endfor %}
+    },
+    "recommendations": [
+        {% for rec in result.website_analysis.recommendations %}
+        "{{ rec|replace('"', '\\"') }}"{% if not loop.last %},{% endif %}
+        {% endfor %}
+    ]
+}</code></pre>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}

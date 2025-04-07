@@ -44,6 +44,13 @@ langchain-mistralai==0.2.7
 langchain-openai==0.3.8
 langchain-text-splitters==0.3.6
 langchain-cohere==0.1.5
+
+# Website analyzer dependencies
+langdetect==1.0.9
+nest-asyncio==1.6.0
+
+# Optional: Playwright (not fully supported on Windows with asyncio)
+# playwright==1.42.0
 langsmith==0.3.13
 MarkupSafe==3.0.2
 marshmallow==3.26.1

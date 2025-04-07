@@ -1,12 +1,14 @@
 from fastapi import APIRouter, HTTPException, Depends, BackgroundTasks, Query
-from ..models.schemas import ScrapeRequest, ScrapeResponse, CodeExecutionResult, ScrapingIssue, StatusResponse
+from ..models.schemas import ScrapeRequest, ScrapeResponse, CodeExecutionResult, ScrapingIssue, StatusResponse, WebsiteAnalysis
 from ..services.llm_service import LLMService
 from ..services.scraper_helper import execute_code_wrapper
+from ..services.website_analyzer import analyze_website
 from ..services.status_service import create_request_id, create_status, get_status, update_status, start_stage, complete_stage, fail_stage
 from ..utils.logger import app_logger, log_code_execution
 import json
 import os
 import time
+import asyncio
 from typing import Dict, List, Optional, Any
 
 router = APIRouter()
@@ -48,6 +50,53 @@ async def scrape_website(
         progress=5.0
     )
 
+    # Analyze the website structure
+    website_analysis_result = None
+    try:
+        # Start website analysis stage
+        start_stage(request_id, "website_analysis", "Analyzing website structure and content")
+        update_status(request_id, progress=10.0, message=f"Analyzing website structure: {request.url}")
+
+        # Run the website analyzer
+        website_analysis_result = await analyze_website(str(request.url))
+
+        # Log some key findings
+        app_logger.info(f"Website analysis completed for: {request.url}")
+        app_logger.info(f"Is dynamic: {website_analysis_result.is_dynamic}")
+        if website_analysis_result.recommendations:
+            app_logger.info(f"Recommendations: {', '.join(website_analysis_result.recommendations[:3])}...")
+
+        # Complete the analysis stage
+        complete_stage(request_id, "website_analysis", "Website analysis completed successfully")
+        update_status(request_id, progress=15.0, message="Website analysis completed")
+    except Exception as e:
+        app_logger.error(f"Error analyzing website: {str(e)}")
+        fail_stage(request_id, "website_analysis", f"Website analysis failed: {str(e)}")
+        # Create a minimal analysis result with default values
+        from ..models.schemas import WebsiteAnalysis
+        website_analysis_result = WebsiteAnalysis(
+            url=str(request.url),
+            is_dynamic=False,
+            content_hierarchy={},
+            components={"forms": 0, "tables": 0, "buttons": 0, "navigation": 0, "modals": 0, "iframes": 0},
+            dynamic_attributes=[],
+            text_ratio=0.0,
+            language="",
+            keyword_density={},
+            structured_data=[],
+            frameworks={"react": False, "angular": False, "vue": False},
+            apis=[],
+            pagination_patterns=[],
+            performance_metrics={},
+            seo_meta={},
+            security_headers={},
+            robots_txt="",
+            selector_suggestions=[],
+            recommendations=["Static analysis failed, using basic scraping approach"],
+            warnings=[f"Analysis error: {str(e)}"],
+        )
+        # Continue with the process even if analysis fails
+
     # Set up LLMs
     try:
         # Start setup stage
@@ -79,7 +128,8 @@ async def scrape_website(
 
         formatted_prompt = llm_service.format_scraping_prompt(
             url=str(request.url),
-            expected_data=request.expected_data
+            expected_data=request.expected_data,
+            website_analysis=website_analysis_result
         )
 
         complete_stage(request_id, "prompt_formatting", "Prompt formatted successfully")
@@ -298,7 +348,7 @@ async def scrape_website(
         message=f"Scraping completed with {attempts} attempts. Success: {final_success}"
     )
 
-    # Return the results with token usage information
+    # Return the results with token usage information and website analysis
     return ScrapeResponse(
         success=final_success,
         data=scraped_data,
@@ -308,5 +358,6 @@ async def scrape_website(
         helper_llm_usage=helper_llm_usage,
         coding_llm_usage=coding_llm_usage,
         total_cost=total_cost,
-        process_stages=get_status(request_id).stages if get_status(request_id) else []
+        process_stages=get_status(request_id).stages if get_status(request_id) else [],
+        website_analysis=website_analysis_result
     )

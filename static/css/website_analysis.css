@@ -1,0 +1,59 @@
+/* Website Analysis Styles */
+
+#website-analysis {
+    transition: opacity 0.5s, transform 0.5s;
+}
+
+#website-analysis .card-header {
+    background-color: #f8f9fa;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.125);
+}
+
+#website-analysis .table {
+    margin-bottom: 0;
+}
+
+#website-analysis .table td:first-child {
+    width: 40%;
+    font-weight: 500;
+}
+
+#website-analysis .alert {
+    margin-bottom: 1rem;
+}
+
+#website-analysis .alert h6 {
+    margin-bottom: 0.5rem;
+}
+
+#website-analysis .alert ul {
+    padding-left: 1.5rem;
+}
+
+#website-analysis .badge {
+    font-size: 0.8rem;
+}
+
+/* Animation for the website analysis section */
+@keyframes highlight-pulse {
+    0% { box-shadow: 0 0 0 0 rgba(13, 110, 253, 0.7); }
+    50% { box-shadow: 0 0 0 10px rgba(13, 110, 253, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(13, 110, 253, 0); }
+}
+
+.highlight-pulse {
+    animation: highlight-pulse 1s ease-in-out;
+}
+
+/* Raw data section */
+#rawAnalysisData pre {
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    #website-analysis .table td:first-child {
+        width: 50%;
+    }
+}

@@ -305,8 +305,8 @@ class LLMService:
 
         return usage
 
-    def format_scraping_prompt(self, url: str, expected_data: str) -> str:
-        """Use helper LLM to format the scraping prompt"""
+    def format_scraping_prompt(self, url: str, expected_data: str, website_analysis = None) -> str:
+        """Use helper LLM to format the scraping prompt with optional website analysis"""
         if not self.helper_llm:
             self.setup_helper_llm()
 
@@ -314,10 +314,102 @@ class LLMService:
         from ..services.scraper_helper import generate_example_output
         example_output = generate_example_output(expected_data)
 
+        # Base prompt
         prompt = f"""
         I need to scrape data from this website: {url}
 
         The specific data I want to extract is: {expected_data}
+        """
+
+        # Add website analysis if available
+        if website_analysis:
+            # Extract key information from the analysis
+            is_dynamic = getattr(website_analysis, 'is_dynamic', False)
+            components = getattr(website_analysis, 'components', {})
+            frameworks = getattr(website_analysis, 'frameworks', {})
+            recommendations = getattr(website_analysis, 'recommendations', [])
+            selector_suggestions = getattr(website_analysis, 'selector_suggestions', [])
+            pagination_patterns = getattr(website_analysis, 'pagination_patterns', [])
+            content_hierarchy = getattr(website_analysis, 'content_hierarchy', {})
+            text_ratio = getattr(website_analysis, 'text_ratio', 0)
+            language = getattr(website_analysis, 'language', '')
+            keyword_density = getattr(website_analysis, 'keyword_density', {})
+            structured_data = getattr(website_analysis, 'structured_data', [])
+            apis = getattr(website_analysis, 'apis', [])
+            performance_metrics = getattr(website_analysis, 'performance_metrics', {})
+            seo_meta = getattr(website_analysis, 'seo_meta', {})
+            security_headers = getattr(website_analysis, 'security_headers', {})
+            dynamic_attributes = getattr(website_analysis, 'dynamic_attributes', [])
+
+            # Format the analysis information
+            analysis_info = f"""
+
+            WEBSITE ANALYSIS RESULTS:
+            - Dynamic content: {'Yes' if is_dynamic else 'No'}
+            - Components detected: {', '.join([f"{k} ({v})" for k, v in components.items() if v > 0])}
+            - Frameworks: {', '.join([k for k, v in frameworks.items() if v]) or 'None detected'}
+            - Text ratio: {text_ratio:.2f}
+            - Language: {language if language else 'Not detected'}
+            - Content structure: {', '.join([f"{k} ({v})" for k, v in content_hierarchy.items() if v > 0])}
+            """
+
+            # Add recommendations if available
+            if recommendations:
+                analysis_info += f"""
+            - Technical recommendations:
+              * {"\n              * ".join(recommendations)}
+            """
+
+            # Add selector suggestions if available
+            if selector_suggestions:
+                analysis_info += f"""
+            - Suggested selectors:
+              * {"\n              * ".join(selector_suggestions)}
+            """
+
+            # Add pagination information if available
+            if pagination_patterns:
+                analysis_info += f"""
+            - Pagination detected: {', '.join(pagination_patterns)}
+            """
+
+            # Add dynamic attributes if available
+            if dynamic_attributes:
+                analysis_info += f"""
+            - Dynamic attributes: {', '.join(dynamic_attributes[:5])}{'...' if len(dynamic_attributes) > 5 else ''}
+            """
+
+            # Add API information if available
+            if apis:
+                analysis_info += f"""
+            - APIs detected: {len(apis)}
+            """
+
+            # Add performance metrics if available
+            if performance_metrics:
+                load_time = performance_metrics.get('loadTime', 0)
+                analysis_info += f"""
+            - Load time: {load_time}ms
+            """
+
+            # Add keyword information if available
+            if keyword_density:
+                top_keywords = list(keyword_density.items())[:5]
+                analysis_info += f"""
+            - Top keywords: {', '.join([f"{k} ({v})" for k, v in top_keywords])}
+            """
+
+            # Add security information if available
+            if any(security_headers.values()):
+                analysis_info += f"""
+            - Security headers: {', '.join([k for k, v in security_headers.items() if v])}
+            """
+
+            # Add the analysis to the prompt
+            prompt += analysis_info
+
+        # Add the rest of the prompt
+        prompt += f"""
 
         I need you to format this request into a clear, detailed prompt for an LLM that will
         generate Python web scraping code. The prompt should be structured to help the LLM
@@ -326,19 +418,24 @@ class LLMService:
         Format the prompt to include:
         - Clear description of the target website
         - Specific data fields to extract
-        - Any special considerations for this website
+        - Any special considerations for this website based on the analysis
         - Request for robust error handling
         - Request for clear output formatting
 
-        IMPORTANT: The code should print the output in this format:
+        IMPORTANT: The code should print the output as JSON. Here's an example format, but the model should adapt this
+        to best represent the specific data being extracted:
         ```
         {example_output}
         ```
+
+        The model has flexibility to design the JSON structure that best represents the extracted data,
+        as long as it's well-organized and contains all the requested information.
 
         Make sure to emphasize that the code should:
         1. Be complete and runnable Python code
         2. Include all necessary imports
         3. Print the results as shown in the example format above
+        4. Use the appropriate scraping approach based on the website analysis
         """
 
         app_logger.info(f"Formatting scraping prompt for URL: {url}")
@@ -441,7 +538,8 @@ class LLMService:
         - Format your entire response as a code block with ```python at the start and ``` at the end
         - Include all necessary imports at the top
         - Use requests and BeautifulSoup for simple sites
-        - Print the extracted data at the end (preferably as JSON)
+        - Print the extracted data at the end as JSON
+        - Design the JSON structure to best represent the specific data being extracted
         - Handle basic errors in case the site structure changes
 
         SIMPLICITY IS KEY:
@@ -454,15 +552,30 @@ class LLMService:
         import requests
         from bs4 import BeautifulSoup
         import json
+        import re
 
         url = "https://example.com"
         response = requests.get(url, headers={"User-Agent": "Mozilla/5.0"})
         soup = BeautifulSoup(response.content, "html.parser")
 
-        # Extract the data
-        data = {"results": ["item1", "item2"]}
+        # Extract the data - structure will vary based on the specific data being extracted
+        # This is just an example structure
+        data = {
+            "products": [
+                {
+                    "name": "Product 1",
+                    "price": "$19.99",
+                    "description": "Product description here"
+                }
+            ],
+            "categories": ["Category 1", "Category 2"],
+            "metadata": {
+                "total_items": 42,
+                "page": 1
+            }
+        }
 
-        # Print the result
+        # Print the result as JSON
         print(json.dumps(data, indent=2))
         ```
         """

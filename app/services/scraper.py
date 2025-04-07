@@ -14,12 +14,13 @@ except ImportError:
     resource = None
 from collections import deque
 from typing import Dict, List, Tuple, Optional
+from ..utils.logger import app_logger
 
 # Security settings
 ALLOWED_PACKAGES = [
-    "numpy", "pandas", "requests", 
-    "beautifulsoup4", "selenium", "scrapy", 
-    "lxml", "html5lib", "httpx", "parsel", 
+    "numpy", "pandas", "requests",
+    "beautifulsoup4", "selenium", "scrapy",
+    "lxml", "html5lib", "httpx", "parsel",
     "fake-useragent", "playwright", "webdriver-manager",
     "selenium", "bs4", "urllib3"
 ]
@@ -38,8 +39,8 @@ SCRAPING_ERROR_PATTERNS = {
     "captcha": "CAPTCHA detected - site is using anti-bot protection"
 }
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-logger = logging.getLogger(__name__)
+# Use the app_logger instead of creating a new logger
+logger = app_logger
 
 def analyze_scraping_errors(stderr: str) -> dict:
     """
@@ -47,11 +48,11 @@ def analyze_scraping_errors(stderr: str) -> dict:
     and provide targeted recommendations
     """
     scraping_issues = []
-    
+
     for pattern, explanation in SCRAPING_ERROR_PATTERNS.items():
         if pattern.lower() in stderr.lower():
             recommendation = ""
-            
+
             # Add specific recommendations based on error type
             if "403" in pattern or "Connection refused" in pattern:
                 recommendation = "Try adding request headers (User-Agent) or using a headless browser"
@@ -63,13 +64,13 @@ def analyze_scraping_errors(stderr: str) -> dict:
                 recommendation = "Check selector or add explicit waits for dynamic content"
             elif "captcha" in pattern:
                 recommendation = "Site uses CAPTCHA protection - consider if scraping is appropriate"
-            
+
             scraping_issues.append({
                 "error_type": pattern,
                 "explanation": explanation,
                 "recommendation": recommendation
             })
-    
+
     return scraping_issues
 
 
@@ -126,11 +127,11 @@ def detect_required_imports(code: str) -> List[str]:
             def visit_Import(self, node):
                 for alias in node.names:
                     imports.add(alias.name.split('.')[0])
-            
+
             def visit_ImportFrom(self, node):
                 if node.module:
                     imports.add(node.module.split('.')[0])
-        
+
         ImportVisitor().visit(tree)
         return list(imports)
     except SyntaxError:
@@ -163,7 +164,7 @@ def preprocess_code(code_string: str) -> str:
     """Standardize whitespace and basic formatting"""
     # Convert tabs to 4 spaces
     code = code_string.expandtabs(4)
-    
+
     # Remove trailing whitespace while preserving empty lines
     lines = []
     for line in code.split('\n'):
@@ -172,7 +173,7 @@ def preprocess_code(code_string: str) -> str:
             lines.append('')  # Preserve empty lines
         else:
             lines.append(stripped)
-    
+
     return '\n'.join(lines)
 
 # ==== IMPROVED: Stack-based delimiter fixing ====
@@ -180,7 +181,7 @@ def fix_unclosed_delimiters(code_string: str) -> str:
     """Fix unclosed brackets/parens/braces at correct positions"""
     stack = deque()  # Each item: (char, line_num, col_num)
     lines = code_string.split('\n')
-    
+
     for line_num, line in enumerate(lines):
         in_string = False
         string_char = None
@@ -220,7 +221,7 @@ def fix_orphaned_blocks(code_string: str, max_depth: int = 3) -> str:
         for i, line in enumerate(lines):
             stripped = line.strip()
             indent = len(line) - len(line.lstrip())
-            
+
             if stripped.startswith(('else:', 'elif ', 'except:', 'finally:')):
                 # Check for matching parent (if for else/elif, try for except/finally)
                 parent_found = False
@@ -254,38 +255,38 @@ def fix_missing_colons(code_string: str) -> str:
     lines = code_string.split('\n')
     keywords = ['def', 'class', 'if', 'elif', 'else', 'for', 'while', 'try', 'except', 'finally', 'with']
     new_lines = []
-    
+
     # Using regular expressions to find statements without colons
     block_statement_pattern = re.compile(r'^(\s*)((?:' + '|'.join(keywords) + r')\b\s+[^:]*?)$')
-    
+
     for i, line in enumerate(lines):
         # Skip empty lines
         if not line.strip():
             new_lines.append(line)
             continue
-        
+
         match = block_statement_pattern.match(line)
         if match:
             # We found a line that looks like a block statement without a colon
             indentation, statement = match.groups()
-            
+
             # Check if there's a comment at the end
             comment_match = re.search(r'(#.*)$', statement)
             comment = comment_match.group(1) if comment_match else ""
-            
+
             # Remove comment for the check
             statement_without_comment = re.sub(r'#.*$', '', statement).rstrip()
-            
+
             # If it really doesn't end with a colon, add one
             if not statement_without_comment.endswith(':'):
                 fixed_line = f"{indentation}{statement_without_comment}:{comment}"
                 logger.info(f"Added missing colon on line {i+1}: '{line}' -> '{fixed_line}'")
                 new_lines.append(fixed_line)
                 continue
-        
+
         # If we get here, either it's not a block statement or it already has a colon
         new_lines.append(line)
-    
+
     return '\n'.join(new_lines)
 
 # ==== NEW: Fix indentation in blocks ====
@@ -332,7 +333,7 @@ def execute_code(code_string: str, timeout: int = DEFAULT_TIMEOUT) -> Dict:
     Applies several syntax fixers before formatting and execution."""
     code_string = preprocess_code(code_string)
     fix_methods = []
-    
+
     # Phase 1: Dependency handling
     required_imports = detect_required_imports(code_string)
     missing_imports = [imp for imp in required_imports if not safe_import(imp)]
@@ -344,22 +345,22 @@ def execute_code(code_string: str, timeout: int = DEFAULT_TIMEOUT) -> Dict:
                 "fix_methods": [],
                 "scraping_issues": []
             }
-    
+
     # Phase 2: Syntax fixing
     syntax_valid = validate_syntax(code_string)
     if not syntax_valid:
         logger.info("Attempting syntax fixes...")
-        
+
         # Apply fix for missing colons first
         original_code = code_string
         code_string = fix_missing_colons(code_string)
         if code_string != original_code:
             fix_methods.append('colon_fix')
             logger.info("Applied colon fixes")
-            
+
             # Check if that fixed the syntax
             syntax_valid = validate_syntax(code_string)
-        
+
         # If still invalid, try fixing unclosed delimiters
         if not syntax_valid:
             original_code = code_string
@@ -367,10 +368,10 @@ def execute_code(code_string: str, timeout: int = DEFAULT_TIMEOUT) -> Dict:
             if code_string != original_code:
                 fix_methods.append('delimiter_fix')
                 logger.info("Applied delimiter fixes")
-                
+
                 # Check if that fixed the syntax
                 syntax_valid = validate_syntax(code_string)
-        
+
         # If still invalid, try fixing orphaned blocks
         if not syntax_valid:
             original_code = code_string
@@ -378,10 +379,10 @@ def execute_code(code_string: str, timeout: int = DEFAULT_TIMEOUT) -> Dict:
             if code_string != original_code:
                 fix_methods.append('block_fix')
                 logger.info("Applied block fixes")
-                
+
                 # Check if that fixed the syntax
                 syntax_valid = validate_syntax(code_string)
-        
+
         # If still invalid, try fixing indentation
         if not syntax_valid:
             original_code = code_string
@@ -389,10 +390,10 @@ def execute_code(code_string: str, timeout: int = DEFAULT_TIMEOUT) -> Dict:
             if code_string != original_code:
                 fix_methods.append('indent_fix')
                 logger.info("Applied indentation fixes")
-                
+
                 # Final syntax check
                 syntax_valid = validate_syntax(code_string)
-        
+
         # If we still have invalid syntax after all our fixes, give up
         if not syntax_valid:
             logger.warning("Unable to fix all syntax errors")
@@ -402,17 +403,17 @@ def execute_code(code_string: str, timeout: int = DEFAULT_TIMEOUT) -> Dict:
                 "fix_methods": fix_methods,
                 "scraping_issues": []
             }
-    
+
     # Phase 3: Formatting (using formatter priority)
     formatting_applied = False
     formatter_priority = ['black', 'yapf', 'autopep8']  # Removed ruff since it's causing issues
-    
+
     for formatter in formatter_priority:
         if AVAILABLE_FORMATTERS.get(formatter, False):
             try:
                 formatter_func = globals()[f'format_with_{formatter}']
                 formatted = formatter_func(code_string)
-                
+
                 # Only use formatted code if it's valid syntax
                 if validate_syntax(formatted):
                     code_string = formatted
@@ -425,20 +426,20 @@ def execute_code(code_string: str, timeout: int = DEFAULT_TIMEOUT) -> Dict:
             except Exception as e:
                 logger.error(f"Error using {formatter}: {e}")
                 # Continue to the next formatter
-    
+
     if not formatting_applied:
         logger.warning("No formatters were successfully applied")
-    
+
     # Detect what type of scraper we're dealing with
     scraper_type = detect_script_type(code_string)
     logger.info(f"Detected scraper type: {scraper_type}")
-    
+
     # Phase 4: Secure execution in a temporary directory
     with tempfile.TemporaryDirectory() as tmpdir:
         file_path = os.path.join(tmpdir, "code.py")
         with open(file_path, "w") as f:
             f.write(code_string)
-        
+
         try:
             start_time = time.time()
             # On Windows, preexec_fn is not supported
@@ -464,10 +465,10 @@ def execute_code(code_string: str, timeout: int = DEFAULT_TIMEOUT) -> Dict:
         except subprocess.CalledProcessError as e:
             stderr_output = e.stderr
             execution_time = time.time() - start_time
-            
+
             # Analyze scraping-specific errors
             scraping_issues = analyze_scraping_errors(stderr_output)
-            
+
             return {
                 "stdout": e.stdout,
                 "stderr": stderr_output,
@@ -484,7 +485,7 @@ def execute_code(code_string: str, timeout: int = DEFAULT_TIMEOUT) -> Dict:
                 timeout_message += ". Browser-based scrapers often need longer timeouts or explicit waits."
             elif scraper_type == "requests":
                 timeout_message += ". Consider adding timeout parameters to your requests."
-            
+
             return {
                 "stdout": "",
                 "stderr": timeout_message,
@@ -511,7 +512,7 @@ def execute_code(code_string: str, timeout: int = DEFAULT_TIMEOUT) -> Dict:
                 "scraping_issues": analyze_scraping_errors(str(e)),
                 "scraper_type": scraper_type
             }
-        
+
 def detect_script_type(code_string: str) -> str:
     """
     Detect what type of web scraping the code is using
@@ -529,7 +530,7 @@ def detect_script_type(code_string: str) -> str:
         return "requests"
     else:
         return "unknown"
-    
+
 # ==== ORIGINAL FORMATTERS (modified with logging) ====
 def format_with_black(code_string: str) -> str:
     if not AVAILABLE_FORMATTERS['black']:
@@ -546,38 +547,38 @@ def format_with_ruff(code_string: str) -> str:
     if not AVAILABLE_FORMATTERS['ruff']:
         logger.warning("Ruff formatter not available")
         return code_string
-    
+
     temp_file = None
     try:
         # Check if ruff is actually installed and accessible
-        result = subprocess.run(['ruff', '--version'], 
-                               capture_output=True, 
-                               text=True, 
+        result = subprocess.run(['ruff', '--version'],
+                               capture_output=True,
+                               text=True,
                                check=False)
-        
+
         if result.returncode != 0:
             logger.error("Ruff binary not accessible in PATH")
             AVAILABLE_FORMATTERS['ruff'] = False
             return code_string
-        
+
         # If we get here, ruff is available
         with tempfile.NamedTemporaryFile(mode='w+', suffix='.py', delete=False) as f:
             temp_file = f.name
             f.write(code_string)
             f.flush()
-        
-        format_result = subprocess.run(['ruff', 'format', temp_file], 
+
+        format_result = subprocess.run(['ruff', 'format', temp_file],
                                       capture_output=True,
-                                      text=True, 
+                                      text=True,
                                       check=False)
-        
+
         if format_result.returncode != 0:
             logger.error(f"Ruff formatting failed: {format_result.stderr}")
             return code_string
-            
+
         with open(temp_file, 'r') as formatted:
             formatted_code = formatted.read()
-        
+
         return formatted_code
     except Exception as e:
         logger.error(f"Ruff failed: {e}")

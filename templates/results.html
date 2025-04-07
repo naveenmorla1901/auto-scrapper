@@ -8,6 +8,7 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism.min.css" rel="stylesheet">
     <link href="/static/css/status.css" rel="stylesheet">
+    <link href="/static/css/website_analysis.css" rel="stylesheet">
     <style>
         .container {
             max-width: 1000px;
@@ -232,6 +233,9 @@
     <!-- Include token usage information -->
     {% include "token_usage.html" %}
 
+    <!-- Include website analysis information -->
+    {% include "website_analysis.html" %}
+
     <!-- Status tracking container -->
     <div id="status-container" class="mb-4" style="display: none;">
         <div class="card">
@@ -273,6 +277,7 @@
     <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-python.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-json.min.js"></script>
     <script src="/static/js/status.js"></script>
+    <script src="/static/js/website_analysis.js"></script>
     <script>
         function copyToClipboard(elementId) {
             const element = document.getElementById(elementId);
