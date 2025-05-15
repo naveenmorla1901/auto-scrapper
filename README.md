@@ -103,6 +103,30 @@ An intelligent web scraping tool that uses LLMs to generate and refine scraping 
 
 3. Open your browser and navigate to http://localhost:8000
 
+## Deployment
+
+### Oracle Cloud Deployment
+
+When deploying to Oracle Cloud, you might encounter issues with Python version compatibility. The application is designed for Python 3.9+, but Oracle Cloud might be running Python 3.8.
+
+If you encounter pip installation errors during deployment, use the provided emergency deployment fix script:
+
+```bash
+# Make the script executable
+chmod +x emergency_deployment_fix.sh
+
+# Run the script
+./emergency_deployment_fix.sh
+```
+
+This script will:
+1. Check your Python version
+2. Create a fresh virtual environment
+3. Install pip using the correct version-specific URL
+4. Install all required dependencies
+
+For more details, see the [DEPLOYMENT_GUIDE.md](DEPLOYMENT_GUIDE.md) file.
+
 ## Usage
 
 1. Enter the URL of the website you want to scrape

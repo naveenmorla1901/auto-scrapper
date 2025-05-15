@@ -10,6 +10,7 @@ from dotenv import load_dotenv
 from app.services.status_service import create_request_id, create_status, cleanup_old_statuses
 from app.utils.logger import app_logger
 from app.utils.dependency_checker import check_website_analyzer_dependencies
+from app.services.cache_service import remove_expired_cache
 
 # Load environment variables from .env file
 load_dotenv()
@@ -43,16 +44,22 @@ app.include_router(endpoints.router, prefix="/api")
 
 # Set up periodic cleanup of old status entries
 def cleanup_task():
-    """Periodically clean up old status entries"""
+    """Periodically clean up old status entries and expired cache"""
     while True:
         try:
             # Sleep first to avoid cleaning up immediately on startup
             time.sleep(60)  # Run every minute
 
             # Clean up old status entries
-            cleaned = cleanup_old_statuses()
-            if cleaned > 0:
-                app_logger.debug(f"Cleaned up {cleaned} old status entries")
+            cleaned_statuses = cleanup_old_statuses()
+            if cleaned_statuses > 0:
+                app_logger.debug(f"Cleaned up {cleaned_statuses} old status entries")
+                
+            # Every 10 minutes, clean up expired cache entries
+            if int(time.time()) % 600 < 60:  # Run every 10 minutes
+                cleaned_cache = remove_expired_cache()
+                if cleaned_cache > 0:
+                    app_logger.debug(f"Cleaned up {cleaned_cache} expired cache entries")
         except Exception as e:
             app_logger.error(f"Error in cleanup task: {str(e)}")
 

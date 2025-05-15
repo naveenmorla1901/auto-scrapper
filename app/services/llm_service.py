@@ -5,9 +5,10 @@ import re
 import time
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_openai import ChatOpenAI
-from langchain.schema import HumanMessage, SystemMessage
+from langchain.schema import HumanMessage, SystemMessage, AIMessage
 from ..models.schemas import CodeExecutionResult, TokenUsage
 from ..utils.logger import app_logger, log_llm_interaction
+from ..services.enhanced_llm import create_enhanced_scraping_prompt
 
 class LLMService:
     def __init__(self):
@@ -88,10 +89,12 @@ class LLMService:
             "mistral-small": "mistral-small-latest",
 
             # DeepSeek models - their actual API names
-            "deepseek-coder": "deepseek-coder-33b-instruct",
-            "deepseek-chat": "deepseek-llm-67b-chat",
-            "deepseek-llm-67b": "deepseek-llm-67b-base",
-            "deepseek-llm-7b": "deepseek-llm-7b-base",
+            # According to DeepSeek API docs, the correct model name is:
+            # - deepseek-chat
+            "deepseek-coder": "deepseek-chat",
+            "deepseek-chat": "deepseek-chat",
+            "deepseek-llm-67b": "deepseek-chat",
+            "deepseek-llm-7b": "deepseek-chat",
 
             # Cohere models
             "command-r": "command-r-v1",
@@ -137,36 +140,48 @@ class LLMService:
 
     def setup_coding_llm(self, model: str, api_key: str):
         """Set up the coding LLM based on user preference and API key"""
-        app_logger.info(f"Setting up coding LLM: {model}")
-        self.coding_model_name = model
+        app_logger.info(f"Attempting to set up coding LLM: {model}")
+        self.coding_model_name = model # Store the user-provided name
+        api_model_name = self.map_model_name(model) # Get potentially mapped name for API calls
+        app_logger.info(f"Using API model name: {api_model_name}")
 
+        provider = "unknown" # Initialize provider
         try:
             provider = self.get_provider(model)
             app_logger.info(f"Detected provider: {provider}")
 
+            if not api_key:
+                 raise ValueError(f"API key is missing for provider {provider}")
+
+            # Common settings
+            temperature = 0.1
+            # Adjust max_tokens based on model/provider defaults if needed
+            max_tokens = 4096 # Example: Set a sensible default max_tokens
+
             if provider == "openai":
+                from langchain_openai import ChatOpenAI # Import within block
                 self.coding_llm = ChatOpenAI(
-                    model=model,
-                    temperature=0.1,
+                    model=api_model_name,
+                    temperature=temperature,
+                    max_tokens=max_tokens,
                     openai_api_key=api_key
                 )
             elif provider == "google":
+                from langchain_google_genai import ChatGoogleGenerativeAI # Import within block
                 self.coding_llm = ChatGoogleGenerativeAI(
-                    model=model,
-                    temperature=0.1,
-                    google_api_key=api_key
+                    model=api_model_name,
+                    temperature=temperature,
+                    google_api_key=api_key,
+                    convert_system_message_to_human=True # May be needed
+                    # Add safety_settings here if needed
                 )
             elif provider == "anthropic":
                 try:
-                    from langchain_anthropic import ChatAnthropic
-
-                    # Use the mapped model name for Claude models
-                    api_model_name = self.map_model_name(model)
-                    app_logger.info(f"Using Claude API model name: {api_model_name}")
-
+                    from langchain_anthropic import ChatAnthropic # Import within block
                     self.coding_llm = ChatAnthropic(
                         model=api_model_name,
-                        temperature=0.1,
+                        temperature=temperature,
+                        max_tokens=max_tokens, # Anthropic uses max_tokens_to_sample or max_tokens
                         anthropic_api_key=api_key
                     )
                 except ImportError:
@@ -174,136 +189,280 @@ class LLMService:
                     app_logger.error(error_msg)
                     raise ImportError(error_msg)
             elif provider == "mistral":
-                try:
+                 # ... (Mistral logic as before, ensuring imports are within try/except) ...
+                 try:
                     from langchain_mistralai.chat_models import ChatMistralAI
                     self.coding_llm = ChatMistralAI(
-                        model=model,
-                        temperature=0.1,
+                        model=api_model_name,
+                        temperature=temperature,
+                        max_tokens=max_tokens,
                         mistral_api_key=api_key
                     )
-                except ImportError:
-                    error_msg = "Mistral AI support requires langchain-mistralai package. Install it with: pip install langchain-mistralai"
-                    app_logger.error(error_msg)
-                    raise ImportError(error_msg)
-            elif provider == "meta":
-                # For Meta's Llama models, typically accessed through hosted APIs
-                try:
-                    # Access through Together AI
-                    from langchain_community.chat_models import ChatTogetherAI
-                    self.coding_llm = ChatTogetherAI(
-                        model=self.map_model_name(model),
-                        together_api_key=api_key,
-                        temperature=0.1
+                 except ImportError:
+                    try:
+                        from langchain_community.chat_models import ChatMistralAI as ChatMistralAICommunity
+                        app_logger.warning("langchain-mistralai not found, using langchain-community version.")
+                        self.coding_llm = ChatMistralAICommunity(
+                             model=api_model_name,
+                             temperature=temperature,
+                             max_tokens=max_tokens,
+                             mistral_api_key=api_key
+                         )
+                    except ImportError:
+                        error_msg = "Mistral AI support requires langchain-mistralai or langchain-community. Install with: pip install langchain-mistralai langchain-community"
+                        app_logger.error(error_msg)
+                        raise ImportError(error_msg)
+
+            elif provider == "cohere":
+                 try:
+                    from langchain_cohere import ChatCohere # Import within block
+                    self.coding_llm = ChatCohere(
+                        model=api_model_name,
+                        temperature=temperature,
+                        cohere_api_key=api_key
                     )
-                except ImportError:
-                    error_msg = "Meta Llama support requires langchain-community package. Install it with: pip install langchain-community"
+                 except ImportError:
+                    error_msg = "Cohere support requires langchain-cohere package. Install with: pip install langchain-cohere"
                     app_logger.error(error_msg)
                     raise ImportError(error_msg)
+
+            # --- Specific Provider Integrations from Community ---
             elif provider == "deepseek":
                 try:
-                    # DeepSeek models can be accessed through Together AI
-                    from langchain_community.chat_models import ChatTogetherAI
-                    self.coding_llm = ChatTogetherAI(
-                        model=self.map_model_name(model),
-                        together_api_key=api_key,
-                        temperature=0.1
-                    )
-                except ImportError:
-                    error_msg = "DeepSeek support requires langchain-community package. Install it with: pip install langchain-community"
-                    app_logger.error(error_msg)
-                    raise ImportError(error_msg)
-            elif provider == "cohere":
-                try:
-                    # Try using the community implementation first
+                    # First try direct DeepSeek integration using OpenAI SDK
                     try:
-                        from langchain_community.chat_models import ChatCohere
-                        self.coding_llm = ChatCohere(
-                            model=self.map_model_name(model),
-                            cohere_api_key=api_key,
-                            temperature=0.1
+                        from openai import OpenAI
+                        from langchain.chat_models.base import BaseChatModel
+                        from langchain.schema import ChatResult, AIMessage, ChatGeneration
+                        from typing import Optional
+
+                        app_logger.info(f"Attempting direct DeepSeek integration using OpenAI SDK")
+
+                        class DeepSeekChatModel(BaseChatModel):
+                            """Custom chat model for DeepSeek API using OpenAI SDK."""
+
+                            # Define class variables for Pydantic
+                            model_name: str = "deepseek-chat"
+                            api_key: str = None
+                            temperature: float = 0.1
+                            max_tokens: Optional[int] = 4096
+
+                            def __init__(self, model_name, api_key, temperature=0.1, max_tokens=4096):
+                                """Initialize with model name and API key."""
+                                # Initialize parent class
+                                super().__init__()
+                                # Set instance variables
+                                self.model_name = model_name
+                                self.api_key = api_key
+                                self.temperature = temperature
+                                self.max_tokens = max_tokens
+                                # Create OpenAI client with DeepSeek base URL
+                                self._client = OpenAI(api_key=api_key, base_url="https://api.deepseek.com")
+                                app_logger.info(f"Created DeepSeek client with model: {model_name}")
+
+                            @property
+                            def _llm_type(self) -> str:
+                                """Return the type of LLM."""
+                                return "deepseek_chat"
+
+                            def _generate(self, messages, stop=None, run_manager=None, **kwargs):
+                                """Generate a response from the DeepSeek API."""
+                                # Convert LangChain messages to DeepSeek format
+                                deepseek_messages = []
+                                for message in messages:
+                                    if isinstance(message, HumanMessage):
+                                        deepseek_messages.append({"role": "user", "content": message.content})
+                                    elif isinstance(message, SystemMessage):
+                                        deepseek_messages.append({"role": "system", "content": message.content})
+                                    else:
+                                        deepseek_messages.append({"role": "assistant", "content": message.content})
+
+                                # Prepare API parameters
+                                params = {
+                                    "model": self.model_name,
+                                    "messages": deepseek_messages,
+                                    "temperature": self.temperature,
+                                    "max_tokens": min(self.max_tokens, 8192),  # DeepSeek limit is 8192
+                                    "stream": False
+                                }
+
+                                # Add stop sequences if provided
+                                if stop:
+                                    params["stop"] = stop
+
+                                try:
+                                    # Make API call
+                                    response = self._client.chat.completions.create(**params)
+                                    content = response.choices[0].message.content
+
+                                    # Create LangChain response format
+                                    message = AIMessage(content=content)
+                                    generation = ChatGeneration(message=message)
+                                    return ChatResult(generations=[generation])
+                                except Exception as e:
+                                    app_logger.error(f"DeepSeek API error: {str(e)}")
+                                    raise
+
+                            async def _agenerate(self, messages, stop=None, run_manager=None, **kwargs):
+                                """Async version just calls the sync version for now."""
+                                return self._generate(messages, stop, run_manager, **kwargs)
+
+                        # Create the DeepSeek chat model
+                        self.coding_llm = DeepSeekChatModel(
+                            model_name="deepseek-chat",  # Use the standard model name for DeepSeek API
+                            api_key=api_key,
+                            temperature=temperature,
+                            max_tokens=4096  # Safe value within DeepSeek's 8192 limit
                         )
-                    except (ImportError, AttributeError):
-                        # Fall back to dedicated package if available
-                        from langchain_cohere import ChatCohere
-                        self.coding_llm = ChatCohere(
-                            model=self.map_model_name(model),
-                            cohere_api_key=api_key,
-                            temperature=0.1
+                        app_logger.info("Successfully initialized direct DeepSeek integration")
+
+                    except ImportError as ie:
+                        app_logger.warning(f"Direct DeepSeek integration failed: {ie}. Trying TogetherAI fallback.")
+                        raise
+                    except Exception as e:
+                        app_logger.warning(f"Direct DeepSeek integration failed: {e}. Trying TogetherAI fallback.")
+                        raise
+
+                except Exception:
+                    # Fallback to TogetherAI
+                    try:
+                        # Use TogetherAI for DeepSeek models - with correct class name
+                        from langchain_community.chat_models import ChatTogetherAI
+
+                        app_logger.info(f"Attempting DeepSeek integration via TogetherAI")
+
+                        # Format model name for Together API if needed
+                        if not api_model_name.startswith("deepseek/"):
+                            together_model_name = f"deepseek/{api_model_name}"
+                            app_logger.info(f"Reformatting DeepSeek model name for Together API: {together_model_name}")
+                        else:
+                            together_model_name = api_model_name
+
+                        self.coding_llm = ChatTogetherAI(
+                            model=together_model_name,
+                            temperature=temperature,
+                            max_tokens=max_tokens,
+                            together_api_key=api_key
                         )
-                except ImportError:
-                    error_msg = "Cohere support requires langchain-community or langchain-cohere package. Install with: pip install langchain-community langchain-cohere"
-                    app_logger.error(error_msg)
-                    raise ImportError(error_msg)
-            elif provider == "ai21":
-                try:
-                    from langchain_community.chat_models import ChatAI21
-                    self.coding_llm = ChatAI21(
-                        model=self.map_model_name(model),
-                        ai21_api_key=api_key,
-                        temperature=0.1
+                        app_logger.info(f"Successfully initialized DeepSeek model via TogetherAI: {together_model_name}")
+                    except ImportError:
+                        error_msg = "DeepSeek integration requires either openai>=1.0.0 or langchain-community with ChatTogetherAI. Install with: pip install openai>=1.0.0 langchain-community>=0.0.10"
+                        app_logger.error(error_msg)
+                        raise ImportError(error_msg)
+                    except Exception as e:
+                        error_msg = f"Failed to initialize DeepSeek model: {e}"
+                        app_logger.error(error_msg)
+                        raise ValueError(error_msg)
+
+            # --- Providers often accessed via Aggregators (like TogetherAI) ---
+            # This block now handles providers intended to go through Together explicitly
+            elif provider in ["together", "meta", "ai21"]: # Removed 'deepseek' from this list
+                 try:
+                    from langchain_community.chat_models import ChatTogether # Import within block
+                    # Ensure api_key passed here is the TOGETHER_API_KEY
+                    # Consider checking os.getenv("TOGETHER_API_KEY") as well
+                    self.coding_llm = ChatTogether(
+                        model=api_model_name, # Use the mapped name which might include provider prefix
+                        temperature=temperature,
+                        max_tokens=max_tokens,
+                        together_api_key=api_key
                     )
-                except ImportError:
-                    error_msg = "AI21 support requires langchain-community package. Install it with: pip install langchain-community"
+                 except ImportError:
+                    error_msg = f"{provider} support via Together AI requires langchain-community. Install with: pip install -U langchain-community"
                     app_logger.error(error_msg)
                     raise ImportError(error_msg)
-            elif provider == "together":
-                try:
-                    from langchain_community.chat_models import ChatTogetherAI
-                    self.coding_llm = ChatTogetherAI(
-                        model=self.map_model_name(model),
-                        together_api_key=api_key,
-                        temperature=0.1
-                    )
-                except ImportError:
-                    error_msg = "Together AI support requires langchain-community package. Install it with: pip install langchain-community"
-                    app_logger.error(error_msg)
-                    raise ImportError(error_msg)
+
+
+            # --- Handle Ollama (Local Models) ---
+            # elif provider == "ollama": # Example, uncomment and add pattern if needed
+            #     try:
+            #         from langchain_community.chat_models import ChatOllama
+            #         ollama_model_name = api_model_name.split(':')[-1]
+            #         self.coding_llm = ChatOllama(model=ollama_model_name, temperature=temperature)
+            #     except ImportError:
+            #         # ... error handling ...
+
+            elif provider == "unknown":
+                 raise ValueError(f"Provider for model '{model}' is unknown or unsupported by this configuration. Cannot set up LLM.")
             else:
-                error_msg = f"Unsupported provider: {provider}"
+                # This case implies a provider was detected but has no explicit handling block
+                error_msg = f"Provider '{provider}' for model '{model}' is recognized but not configured in setup_coding_llm."
                 app_logger.error(error_msg)
                 raise ValueError(error_msg)
 
-        except Exception as e:
-            error_msg = f"Error setting up {model}: {str(e)}"
-            app_logger.error(error_msg)
-            raise ValueError(error_msg)
+            app_logger.info(f"Successfully set up coding LLM: {model} (Provider: {provider}) using {type(self.coding_llm).__name__}")
 
-    def estimate_tokens(self, text: str) -> int:
-        """Estimate the number of tokens in a text string"""
-        # Simple estimation: 1 token ≈ 4 characters for English text
-        return len(text) // 4
+        except ImportError as ie:
+             # Log the specific import error
+             app_logger.error(f"ImportError during setup for {provider} ('{model}'): {ie}. Please ensure required packages are installed.", exc_info=True)
+             # Reraise a more informative error
+             raise ImportError(f"Missing package for {provider}. Please install necessary libraries. Original error: {ie}") from ie
+        except ValueError as ve: # Catch our specific ValueErrors (e.g., missing API key)
+             app_logger.error(f"ValueError during setup for {provider} ('{model}'): {ve}", exc_info=True)
+             self.coding_llm = None # Ensure LLM is not set
+             raise ve # Reraise the ValueError
+        except Exception as e:
+            error_msg = f"An unexpected error occurred setting up coding LLM '{model}' (Provider: {provider}): {e}"
+            app_logger.error(error_msg, exc_info=True) # Log stack trace
+            self.coding_llm = None # Ensure LLM is not set if setup fails
+            raise ValueError(error_msg) from e # Wrap and raise
 
     def calculate_cost(self, model: str, input_tokens: int, output_tokens: int) -> float:
         """Calculate the cost of a model call based on token usage"""
         # Get pricing for the model, or use default if not found
-        pricing = self.pricing.get(model, self.pricing["default"])
+        pricing = self.pricing.get(model)
+        if not pricing:
+            app_logger.warning(f"Pricing not found for model: {model}. Using default pricing.")
+            pricing = self.pricing.get("default", {"input": 0, "output": 0}) # Default to 0 if even default is missing
 
         # Calculate cost (convert from per 1000 tokens to per token)
-        input_cost = (input_tokens / 1000) * pricing["input"]
-        output_cost = (output_tokens / 1000) * pricing["output"]
+        input_cost = (input_tokens / 1000) * pricing.get("input", 0)
+        output_cost = (output_tokens / 1000) * pricing.get("output", 0)
 
         return input_cost + output_cost
 
-    def update_token_usage(self, is_helper: bool, input_text: str, output_text: str) -> TokenUsage:
-        """Update token usage for a model call"""
+    def update_token_usage(self, is_helper: bool, response: AIMessage) -> TokenUsage:
+        """Update token usage for a model call using actual data from response metadata"""
         # Determine which usage to update
-        usage = self.helper_token_usage if is_helper else self.coding_token_usage
+        usage_target = self.helper_token_usage if is_helper else self.coding_token_usage
         model = self.helper_model_name if is_helper else self.coding_model_name
 
-        # Estimate tokens
-        input_tokens = self.estimate_tokens(input_text)
-        output_tokens = self.estimate_tokens(output_text)
+        input_tokens = 0
+        output_tokens = 0
+        cost = 0.0
 
-        # Update usage
-        usage.input_tokens += input_tokens
-        usage.output_tokens += output_tokens
-        usage.total_tokens = usage.input_tokens + usage.output_tokens
+        # Extract token usage from response metadata if available
+        # The structure might vary slightly between LangChain versions and providers
+        if response and hasattr(response, 'response_metadata') and isinstance(response.response_metadata, dict):
+            token_usage_data = response.response_metadata.get('token_usage', {})
+            if isinstance(token_usage_data, dict): # Standard LangChain structure
+                 input_tokens = token_usage_data.get('prompt_tokens', 0) or token_usage_data.get('input_tokens', 0)
+                 output_tokens = token_usage_data.get('completion_tokens', 0) or token_usage_data.get('output_tokens', 0)
+            else:
+                 app_logger.warning(f"Unexpected token_usage format in response_metadata: {token_usage_data}")
+        elif response and hasattr(response, 'usage_metadata') and isinstance(response.usage_metadata, dict):
+             # Some newer versions might use usage_metadata
+             input_tokens = response.usage_metadata.get('input_tokens', 0)
+             output_tokens = response.usage_metadata.get('output_tokens', 0)
+        else:
+            app_logger.warning(f"Could not find token usage data in response metadata for model {model}. Falling back to estimating based on content length.")
+            # Fallback estimation (less accurate) - keep it simple
+            input_tokens = len(response.response_metadata.get('prompt', '')) // 4 if response and hasattr(response, 'response_metadata') else 0 # Rough estimate from prompt if possible
+            output_tokens = len(response.content) // 4
 
-        # Calculate cost
+        # Calculate cost based on actual tokens
         cost = self.calculate_cost(model, input_tokens, output_tokens)
-        usage.cost += cost
 
-        return usage
+        # Update usage target
+        usage_target.input_tokens += input_tokens
+        usage_target.output_tokens += output_tokens
+        usage_target.total_tokens = usage_target.input_tokens + usage_target.output_tokens
+        usage_target.cost += cost
+
+        app_logger.debug(f"Token update ({model}): Input={input_tokens}, Output={output_tokens}, Cost=${cost:.6f}")
+        app_logger.debug(f"Total usage ({'Helper' if is_helper else 'Coding'}): Tokens={usage_target.total_tokens}, Cost=${usage_target.cost:.6f}")
+
+        return usage_target
 
     def format_scraping_prompt(self, url: str, expected_data: str, website_analysis = None) -> str:
         """Use helper LLM to format the scraping prompt with optional website analysis"""
@@ -313,132 +472,11 @@ class LLMService:
         # Generate an example output format based on the expected data
         from ..services.scraper_helper import generate_example_output
         example_output = generate_example_output(expected_data)
+        
+        # Use the enhanced prompt creator
+        prompt = create_enhanced_scraping_prompt(url, expected_data, example_output, website_analysis)
 
-        # Base prompt
-        prompt = f"""
-        I need to scrape data from this website: {url}
-
-        The specific data I want to extract is: {expected_data}
-        """
-
-        # Add website analysis if available
-        if website_analysis:
-            # Extract key information from the analysis
-            is_dynamic = getattr(website_analysis, 'is_dynamic', False)
-            components = getattr(website_analysis, 'components', {})
-            frameworks = getattr(website_analysis, 'frameworks', {})
-            recommendations = getattr(website_analysis, 'recommendations', [])
-            selector_suggestions = getattr(website_analysis, 'selector_suggestions', [])
-            pagination_patterns = getattr(website_analysis, 'pagination_patterns', [])
-            content_hierarchy = getattr(website_analysis, 'content_hierarchy', {})
-            text_ratio = getattr(website_analysis, 'text_ratio', 0)
-            language = getattr(website_analysis, 'language', '')
-            keyword_density = getattr(website_analysis, 'keyword_density', {})
-            structured_data = getattr(website_analysis, 'structured_data', [])
-            apis = getattr(website_analysis, 'apis', [])
-            performance_metrics = getattr(website_analysis, 'performance_metrics', {})
-            seo_meta = getattr(website_analysis, 'seo_meta', {})
-            security_headers = getattr(website_analysis, 'security_headers', {})
-            dynamic_attributes = getattr(website_analysis, 'dynamic_attributes', [])
-
-            # Format the analysis information
-            analysis_info = f"""
-
-            WEBSITE ANALYSIS RESULTS:
-            - Dynamic content: {'Yes' if is_dynamic else 'No'}
-            - Components detected: {', '.join([f"{k} ({v})" for k, v in components.items() if v > 0])}
-            - Frameworks: {', '.join([k for k, v in frameworks.items() if v]) or 'None detected'}
-            - Text ratio: {text_ratio:.2f}
-            - Language: {language if language else 'Not detected'}
-            - Content structure: {', '.join([f"{k} ({v})" for k, v in content_hierarchy.items() if v > 0])}
-            """
-
-            # Add recommendations if available
-            if recommendations:
-                analysis_info += f"""
-            - Technical recommendations:
-              * {"\n              * ".join(recommendations)}
-            """
-
-            # Add selector suggestions if available
-            if selector_suggestions:
-                analysis_info += f"""
-            - Suggested selectors:
-              * {"\n              * ".join(selector_suggestions)}
-            """
-
-            # Add pagination information if available
-            if pagination_patterns:
-                analysis_info += f"""
-            - Pagination detected: {', '.join(pagination_patterns)}
-            """
-
-            # Add dynamic attributes if available
-            if dynamic_attributes:
-                analysis_info += f"""
-            - Dynamic attributes: {', '.join(dynamic_attributes[:5])}{'...' if len(dynamic_attributes) > 5 else ''}
-            """
-
-            # Add API information if available
-            if apis:
-                analysis_info += f"""
-            - APIs detected: {len(apis)}
-            """
-
-            # Add performance metrics if available
-            if performance_metrics:
-                load_time = performance_metrics.get('loadTime', 0)
-                analysis_info += f"""
-            - Load time: {load_time}ms
-            """
-
-            # Add keyword information if available
-            if keyword_density:
-                top_keywords = list(keyword_density.items())[:5]
-                analysis_info += f"""
-            - Top keywords: {', '.join([f"{k} ({v})" for k, v in top_keywords])}
-            """
-
-            # Add security information if available
-            if any(security_headers.values()):
-                analysis_info += f"""
-            - Security headers: {', '.join([k for k, v in security_headers.items() if v])}
-            """
-
-            # Add the analysis to the prompt
-            prompt += analysis_info
-
-        # Add the rest of the prompt
-        prompt += f"""
-
-        I need you to format this request into a clear, detailed prompt for an LLM that will
-        generate Python web scraping code. The prompt should be structured to help the LLM
-        understand exactly what data to extract and how to handle the website.
-
-        Format the prompt to include:
-        - Clear description of the target website
-        - Specific data fields to extract
-        - Any special considerations for this website based on the analysis
-        - Request for robust error handling
-        - Request for clear output formatting
-
-        IMPORTANT: The code should print the output as JSON. Here's an example format, but the model should adapt this
-        to best represent the specific data being extracted:
-        ```
-        {example_output}
-        ```
-
-        The model has flexibility to design the JSON structure that best represents the extracted data,
-        as long as it's well-organized and contains all the requested information.
-
-        Make sure to emphasize that the code should:
-        1. Be complete and runnable Python code
-        2. Include all necessary imports
-        3. Print the results as shown in the example format above
-        4. Use the appropriate scraping approach based on the website analysis
-        """
-
-        app_logger.info(f"Formatting scraping prompt for URL: {url}")
+        app_logger.info(f"Formatting enhanced scraping prompt for URL: {url}")
         log_llm_interaction("INPUT", self.helper_model_name, prompt)
 
         # Track token usage
@@ -447,8 +485,8 @@ class LLMService:
         messages = [HumanMessage(content=prompt)]
         response = self.helper_llm.invoke(messages)
 
-        # Update token usage
-        self.update_token_usage(True, prompt, response.content)
+        # Update token usage using the actual response object
+        self.update_token_usage(True, response)
 
         # Log execution time
         execution_time = time.time() - start_time
@@ -457,20 +495,30 @@ class LLMService:
         log_llm_interaction("OUTPUT", self.helper_model_name, response=response.content)
         return response.content
 
-    def extract_code_from_response(self, response: str) -> str:
-        """Use helper LLM to extract clean code from the coding LLM's response"""
+    def extract_code_from_response(self, response) -> str:
+        """Use helper LLM to extract clean code from the coding LLM's response
+
+        Args:
+            response: Either an AIMessage object or a string containing the LLM response
+
+        Returns:
+            str: The extracted code
+        """
         if not self.helper_llm:
             self.setup_helper_llm()
 
+        # Handle both AIMessage and string inputs
+        response_content = response.content if hasattr(response, 'content') else response
+
         # First, try to extract code using simple regex for markdown code blocks
         import re
-        python_code_blocks = re.findall(r'```python\s*(.*?)\s*```', response, re.DOTALL)
+        python_code_blocks = re.findall(r'```python\s*(.*?)\s*```', response_content, re.DOTALL)
         if python_code_blocks:
             app_logger.info("Found Python code block using regex")
             return python_code_blocks[0].strip()
 
         # If no Python blocks, look for any code blocks
-        code_blocks = re.findall(r'```\s*(.*?)\s*```', response, re.DOTALL)
+        code_blocks = re.findall(r'```\s*(.*?)\s*```', response_content, re.DOTALL)
         if code_blocks:
             app_logger.info("Found generic code block using regex")
             return code_blocks[0].strip()
@@ -484,7 +532,7 @@ class LLMService:
         Do not include any markdown formatting, backticks, or explanation text.
 
         LLM Response:
-        {response}
+        {response_content}
         """
 
         app_logger.info("Using helper LLM to extract code (regex methods failed)")
@@ -496,8 +544,8 @@ class LLMService:
         messages = [HumanMessage(content=prompt)]
         response = self.helper_llm.invoke(messages)
 
-        # Update token usage
-        self.update_token_usage(True, prompt, response.content)
+        # Update token usage using the actual response object
+        self.update_token_usage(True, response)
 
         # Log execution time
         execution_time = time.time() - start_time
@@ -522,8 +570,8 @@ class LLMService:
 
         return extracted_code
 
-    def generate_scraping_code(self, formatted_prompt: str) -> str:
-        """Use coding LLM to generate scraping code"""
+    def generate_scraping_code(self, formatted_prompt: str) -> AIMessage:
+        """Use coding LLM to generate scraping code. Returns the full AIMessage."""
         if not self.coding_llm:
             error_msg = "Coding LLM not set up. Call setup_coding_llm first."
             app_logger.error(error_msg)
@@ -538,6 +586,7 @@ class LLMService:
         - Format your entire response as a code block with ```python at the start and ``` at the end
         - Include all necessary imports at the top
         - Use requests and BeautifulSoup for simple sites
+        - Use Playwright or Selenium for dynamic sites that require JavaScript
         - Print the extracted data at the end as JSON
         - Design the JSON structure to best represent the specific data being extracted
         - Handle basic errors in case the site structure changes
@@ -591,17 +640,24 @@ class LLMService:
         # Track token usage
         start_time = time.time()
 
-        response = self.coding_llm.invoke(messages)
+        # Add try-except block for robustness
+        try:
+            response = self.coding_llm.invoke(messages)
+        except Exception as e:
+            app_logger.error(f"Error invoking coding LLM ({self.coding_model_name}): {e}")
+            # Re-raise or return a custom error object/message
+            raise  # Re-raise the exception for now
 
-        # Update token usage (include system message in input)
-        self.update_token_usage(False, system_message + formatted_prompt, response.content)
+        # Update token usage using the actual response object
+        # Note: System message is part of the input tokens counted by the API
+        self.update_token_usage(False, response)
 
         # Log execution time
         execution_time = time.time() - start_time
         app_logger.info(f"Coding LLM response time: {execution_time:.2f} seconds")
 
         log_llm_interaction("OUTPUT", self.coding_model_name, response=response.content)
-        return response.content
+        return response
 
     def refine_code_with_error(self, code: str, execution_result: CodeExecutionResult) -> str:
         """Use helper LLM to generate a prompt for refining code based on execution errors"""
@@ -664,8 +720,8 @@ class LLMService:
         messages = [HumanMessage(content=prompt)]
         response = self.helper_llm.invoke(messages)
 
-        # Update token usage
-        self.update_token_usage(True, prompt, response.content)
+        # Update token usage using the actual response object
+        self.update_token_usage(True, response)
 
         # Log execution time
         execution_time = time.time() - start_time
@@ -724,8 +780,8 @@ class LLMService:
         messages = [HumanMessage(content=prompt)]
         response = self.helper_llm.invoke(messages)
 
-        # Update token usage
-        self.update_token_usage(True, prompt, response.content)
+        # Update token usage using the actual response object
+        self.update_token_usage(True, response)
 
         # Log execution time
         execution_time = time.time() - start_time
@@ -805,8 +861,8 @@ class LLMService:
         messages = [HumanMessage(content=prompt)]
         response = self.helper_llm.invoke(messages)
 
-        # Update token usage
-        self.update_token_usage(True, prompt, response.content)
+        # Update token usage using the actual response object
+        self.update_token_usage(True, response)
 
         # Log execution time
         execution_time = time.time() - start_time
@@ -841,6 +897,9 @@ class LLMService:
 
         messages = [HumanMessage(content=prompt)]
         response = self.helper_llm.invoke(messages)
+
+        # Update token usage using the actual response object
+        self.update_token_usage(True, response)
 
         is_success = "YES" in response.content.upper()
         app_logger.info(f"Scraping success check result: {'SUCCESS' if is_success else 'FAILURE'}")

@@ -22,7 +22,7 @@ async def get_request_status(request_id: str):
         raise HTTPException(status_code=404, detail=f"Request ID {request_id} not found")
     return status
 
-DEFAULT_MAX_ATTEMPTS = int(os.getenv("MAX_ATTEMPTS", "3"))  # Default from environment
+DEFAULT_MAX_ATTEMPTS = int(os.getenv("MAX_ATTEMPTS", "5"))  # Increased default from 3 to 5
 
 @router.post("/scrape", response_model=ScrapeResponse)
 async def scrape_website(
